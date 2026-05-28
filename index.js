@@ -226,7 +226,7 @@ if (cmd === "checknh") {
     money.set(userId, cash - amount);
 
     message.reply(
-      `🏦**GỬI XU THÀNH CÔNG:** Bạn đã gửi ${formatMoney(amount)} xu vào ${bank.name}\n📈 ${(bank.interest * 100).toFixed(0)}% / ${bank.duration / 86400000} ngày`
+      `**ĐÃ GỬI THÀNH CÔNG** Bạn đã gửi ${formatMoney(amount)} vào ${bank.name}\n📈 ${(bank.interest * 100).toFixed(0)}% / ${bank.duration / 86400000} ngày`
     );
   }
 
@@ -269,7 +269,7 @@ if (cmd === "rt") {
 
   money.set(userId, money.get(userId) + amount);
 
-  message.reply(`🏦**RÚT XU THÀNH CÔNG:** Bạn đã rút ${formatMoney(amount)} xu từ ${banks[bankKey].name}`);
+  message.reply(`**ĐÃ RÚT THÀNH CÔNG** Bạn đã rút ${formatMoney(amount)} xu từ ${banks[bankKey].name}`);
 }
 
 
@@ -292,7 +292,7 @@ if (cmd === "rt") {
 
     money.set(target.id, money.get(target.id) + amount);
 
-    message.reply(`+${formatMoney(amount)} cho ${target}`);
+    message.reply(`Đã thêm ${formatMoney(amount)} xu cho ${target}`);
   }
 
 
@@ -315,7 +315,7 @@ if (cmd === "rt") {
 
     money.set(target.id, current - amount);
 
-    message.reply(`-${formatMoney(amount)} từ ${target}`);
+    message.reply(`Đã thu ${formatMoney(amount)} xu từ ${target}`);
   }
 
 
@@ -371,11 +371,11 @@ if (cmd === "rt") {
 
     await new Promise(r => setTimeout(r, 500));
 
-    let win = Math.random() < 0.7; // 70% cơ hội thắng
+    let win = Math.random() < 0.6; // 60% cơ hội thắng
 
     if (win) {
       money.set(userId, cash + bet);
-      return msg.edit(`🎉 Chúc mừng thắng lớn, bạn đã nhận thêm ${formatMoney(bet) * 2} xu!`);
+      return msg.edit(`🎉 Chúc mừng thắng lớn, bạn đã nhận thêm ${formatMoney(bet)} xu!`);
     } else {
       money.set(userId, cash - bet);
       return msg.edit(`❌ Bạn đã cược ${formatMoney(bet)} xu và mất tất cả`);
@@ -406,7 +406,7 @@ if (cmd === "rt") {
     money.set(userId, cash - amount);
     money.set(target.id, money.get(target.id) + amount);
 
-    message.reply(`đã gửi ${formatMoney(amount)} cho ${target}`);
+    message.reply(`Bạn đã gửi ${formatMoney(amount)} cho ${target}`);
   }
 
 });
