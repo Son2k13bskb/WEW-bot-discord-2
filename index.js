@@ -331,7 +331,8 @@ client.on("messageCreate", async (message) => {
     let cd = cooldown.get(userId) || 0;
 
     if (now < cd) {
-      let t = Math.floor(cd / 10000);
+      // SỬA TẠI ĐÂY: Chia cho 1000 để đổi sang giây đúng chuẩn định dạng Discord yêu cầu
+      let t = Math.floor(cd / 1000); 
       return message.reply(`⏱ cần đợi <t:${t}:R> để cược tiếp!`);
     }
 
