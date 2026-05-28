@@ -321,7 +321,8 @@ if (cmd === "rt") {
  
   // CƯỢC
 
-  if (cmd === "cf") {
+// CƯỢC
+  else if (cmd === "cf") {
     let betArg = args[0];
     let cash = money.get(userId);
 
@@ -330,7 +331,19 @@ if (cmd === "rt") {
 
     if (now < cd) {
       let t = Math.floor(cd / 1000);
-      return message.reply(`⏱ Cần đợi <t:${t}:R> để cược tiếp!`);
+      let timeLeft = cd - now; // Tính thời gian còn lại (mili-giây)
+
+      // 1. Gửi tin nhắn cảnh báo và chờ lấy object tin nhắn
+      let warningMsg = await message.reply(`⏱ Cần đợi <t:${t}:R> để cược tiếp!`);
+
+      // 2. Đặt hẹn giờ tự động xóa tin nhắn sau khi hết timeLeft
+      setTimeout(() => {
+        // Dùng .catch() để tránh lỗi bot sập nếu tin nhắn đã bị người dùng xóa trước đó
+        warningMsg.delete().catch(() => {}); 
+      }, timeLeft);
+
+      // 3. Chặn không cho code chạy tiếp xuống dưới cược tiền
+      return; 
     }
 
     let bet = betArg === "all" ? cash : parseInt(betArg);
@@ -364,10 +377,10 @@ if (cmd === "rt") {
 
     if (win) {
       money.set(userId, cash + bet);
-      msg.edit(`🎉 Chúc mừng thắng lớn, bạn đã nhận ${formatMoney(bet)} xu!`);
+      return msg.edit(`🎉 Chúc mừng thắng lớn, bạn đã nhận ${formatMoney(bet)} xu!`);
     } else {
       money.set(userId, cash - bet);
-      msg.edit(`❌ Bạn đã cược ${formatMoney(bet)} xu và mất tất cả`);
+      return msg.edit(`❌ Bạn đã cược ${formatMoney(bet)} xu và mất tất cả`);
     }
   }
 
