@@ -377,7 +377,7 @@ if (cmd === "rt") {
 
     if (win) {
       money.set(userId, cash + bet);
-      return msg.edit(`🎉 Chúc mừng thắng lớn, bạn đã nhận ${formatMoney(bet)} xu!`);
+      return msg.edit(`🎉 Chúc mừng thắng lớn, bạn đã nhận thêm ${formatMoney(bet)} xu!`);
     } else {
       money.set(userId, cash - bet);
       return msg.edit(`❌ Bạn đã cược ${formatMoney(bet)} xu và mất tất cả`);
