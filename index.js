@@ -321,6 +321,7 @@ if (cmd === "rt") {
   // =======================
   // 🎲 CƯỢC
   // =======================
+  const crypto = require('crypto');
   if (cmd === "cf") {
     let betArg = args[0];
     let cash = money.get(userId);
@@ -329,24 +330,31 @@ if (cmd === "rt") {
     let cd = cooldown.get(userId) || 0;
 
     if (now < cd) {
-      let t = Math.floor(cd / 1000);
-      return message.reply(`⏱ đợi <t:${t}:R>`);
+      let t = Math.floor(cd / 10000);
+      return message.reply(`⏱ cần đợi <t:${t}:R> để cược tiếp!`);
     }
 
     let bet = betArg === "all" ? cash : parseInt(betArg);
 
-    if (!betArg) return message.reply("Thiếu số xu cược");
-    if (isNaN(bet) || bet <= 0) return message.reply("Số xu không hợp lệ");
-    if (bet > cash) return message.reply("Không đủ xu");
+    if (!betArg) return message.reply("Thiếu xu cược!");
+    if (isNaN(bet) || bet <= 0) return message.reply("Số xu không hợp lệ!");
+    if (bet > cash) return message.reply("Không đủ xU để cược!");
 
     cooldown.set(userId, now + 10000);
 
-    let msg = await message.reply("🎲 đang quay...");
+    let msg = await message.reply("🎲 kết quả cược của bạn là.");
+    await new Promise(r => setTimeout(r, 1000));
+    await msg.edit("kết quả cược của bạn là..");
+
+    await new Promise(r => setTimeout(r, 1000));
+    await msg.edit("kết quả cược của bạn là...");
+
     await new Promise(r => setTimeout(r, 1000));
 
-    let win = Math.random() < 0.5;
+  const randomByte = crypto.randomBytes(1)[0]; // Trả về 1 số ngẫu nhiên từ 0 đến 255
+  let win = randomByte < 128; // Có 128 số nhỏ hơn 128 -> Tỉ lệ đúng 50/50
 
-    if (win) {
+  if (win) {
       money.set(userId, cash + bet);
       msg.edit(`🎉 +${formatMoney(bet)} xu`);
     } else {
