@@ -371,7 +371,7 @@ if (cmd === "rt") {
     await new Promise(r => setTimeout(r, 500));
     await msg.edit("🎲 kết quả cược của bạn là...");
 
-    await new Promise(r => setTimeout(r, 1000));
+    await new Promise(r => setTimeout(r, 500));
 
     let win = Math.random() < 0.5;
 
