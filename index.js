@@ -399,4 +399,4 @@ if (cmd === "rt") {
 
 });
 
-client.login("process.env.TOKEN");
+client.login(process.env.TOKEN);
