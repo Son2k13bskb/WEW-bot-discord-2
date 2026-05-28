@@ -85,8 +85,11 @@ function updateBank(userId) {
 
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
-  if (!message.content.startsWith(PREFIX)) return;
+  
+  // Chuyển tin nhắn thành chữ thường để so sánh với PREFIX một cách linh hoạt
+  if (!message.content.toLowerCase().startsWith(PREFIX.toLowerCase())) return;
 
+  // Giữ nguyên logic cắt chuỗi vì độ dài prefix luôn là 3 dù viết hoa hay thường
   const args = message.content.slice(PREFIX.length).trim().split(/ +/);
   const cmd = args.shift()?.toLowerCase();
 
