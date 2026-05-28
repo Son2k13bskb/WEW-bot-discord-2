@@ -338,7 +338,7 @@ if (cmd === "rt") {
 
     if (!betArg) return message.reply("Thiếu xu cược!");
     if (isNaN(bet) || bet <= 0) return message.reply("Số xu không hợp lệ!");
-    if (bet > cash) return message.reply("Không đủ xU để cược!");
+    if (bet > cash) return message.reply("Không đủ xu để cược!");
 
     cooldown.set(userId, now + 10000);
 
