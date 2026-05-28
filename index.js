@@ -20,9 +20,9 @@ const allowedIDs = [
 const money = new Map();
 const cooldown = new Map();
 
-// =======================
-// 🏦 NGÂN HÀNG
-// =======================
+
+// NGÂN HÀNG
+
 const banks = {
   "vpbank": {
     name: "VP Bank",
@@ -40,9 +40,9 @@ const banks = {
 
 const bankData = new Map();
 
-// =======================
-// 🔍 TÌM NGÂN HÀNG
-// =======================
+
+// TÌM NGÂN HÀNG
+
 function findBank(input) {
   input = input.toLowerCase();
 
@@ -57,9 +57,9 @@ function findBank(input) {
   return null;
 }
 
-// =======================
-// 📈 UPDATE LÃI
-// =======================
+
+// UPDATE LÃI
+
 function updateBank(userId) {
   if (!bankData.has(userId)) return;
 
@@ -97,6 +97,7 @@ client.on("messageCreate", async (message) => {
   }
 
   // MENU
+
   if (cmd === "menu") {
     const embed = new EmbedBuilder()
       .setColor("#f5d400")
@@ -126,9 +127,9 @@ client.on("messageCreate", async (message) => {
     return message.reply({ embeds: [embed] });
   }
 
-  // =======================
-// 🏦 CHECK NGÂN HÀNG
-// =======================
+
+// CHECK NGÂN HÀNG
+
 if (cmd === "checknh") {
   updateBank(userId);
 
@@ -162,9 +163,9 @@ if (cmd === "checknh") {
   return message.reply({ embeds: [embed] });
 }
 
-  // =======================
-  // 💰 XEM TIỀN
-  // =======================
+
+  // XEM TIỀN
+
   if (cmd === "xu") {
     updateBank(userId);
 
@@ -176,12 +177,12 @@ if (cmd === "checknh") {
       bankInfo = `\n🏦 ${banks[data.bank].name}: ${formatMoney(data.amount)} xu`;
     }
 
-    message.reply(`💰 ví: ${formatMoney(cash)} xu${bankInfo}`);
+    message.reply(`💰 Số xu trong ví của bạn là: ${formatMoney(cash)} xu${bankInfo}`);
   }
 
-  // =======================
-  // 🏦 GỬI NGÂN HÀNG
-  // =======================
+
+  // GỬI NGÂN HÀNG
+
   if (cmd === "gt") {
     let amount = parseInt(args[args.length - 1]);
     let bankInput = args.slice(0, -1).join(" ");
@@ -229,9 +230,9 @@ if (cmd === "checknh") {
     );
   }
 
-// =======================
-// 🏦 RÚT NGÂN HÀNG
-// =======================
+
+// RÚT NGÂN HÀNG
+
 if (cmd === "rt") {
   let amount = parseInt(args[args.length - 1]);
   let bankInput = args.slice(0, -1).join(" ");
@@ -271,9 +272,9 @@ if (cmd === "rt") {
   message.reply(`Đã rút ${formatMoney(amount)} xu từ ${banks[bankKey].name}`);
 }
 
-  // =======================
-  // 👑 ADD XU
-  // =======================
+
+  // ADD XU
+
   if (cmd === "addxu" || cmd === "add") {
     if (!allowedIDs.includes(userId)) {
       return message.reply("Không có quyền sử dụng lệnh này!");
@@ -294,9 +295,9 @@ if (cmd === "rt") {
     message.reply(`+${formatMoney(amount)} cho ${target}`);
   }
 
-  // =======================
-  // 💸 THU XU
-  // =======================
+
+  // THU XU
+
   if (cmd === "thuxu" || cmd === "thu") {
     if (!allowedIDs.includes(userId)) {
       return message.reply("Không có quyền sử dụng lệnh này!");
@@ -317,9 +318,9 @@ if (cmd === "rt") {
     message.reply(`-${formatMoney(amount)} từ ${target}`);
   }
 
-  // =======================
-  // 🎲 CƯỢC
-  // =======================
+ 
+  // CƯỢC
+
   if (cmd === "cf") {
     let betArg = args[0];
     let cash = money.get(userId);
@@ -340,21 +341,21 @@ if (cmd === "rt") {
 
     cooldown.set(userId, now + 10000);
 
-    let msg = await message.reply("🎲 Kết quả cược của bạn là...");
-    await new Promise(r => setTimeout(r, 1000));
+    let msg = await message.reply("🎲 Kết quả cược của bạn là.");
+    await new Promise(r => setTimeout(r, 500));
 
     await msg.edit("🎲 kết quả cược của bạn là..");
 
-    await new Promise(r => setTimeout(r, 1000));
+    await new Promise(r => setTimeout(r, 500));
     await msg.edit("🎲 kết quả cược của bạn là...");
 
-    await new Promise(r => setTimeout(r, 1000));
+    await new Promise(r => setTimeout(r, 500));
     await msg.edit("🎲 kết quả cược của bạn là.");
 
-    await new Promise(r => setTimeout(r, 1000));
+    await new Promise(r => setTimeout(r, 500));
     await msg.edit("🎲 kết quả cược của bạn là..");
 
-    await new Promise(r => setTimeout(r, 1000));
+    await new Promise(r => setTimeout(r, 500));
     await msg.edit("🎲 kết quả cược của bạn là...");
 
     await new Promise(r => setTimeout(r, 1000));
@@ -370,9 +371,9 @@ if (cmd === "rt") {
     }
   }
 
-  // =======================
-  // 🎁 GIVE
-  // =======================
+
+  // GIVE
+
   if (cmd === "givexu" || cmd === "give") {
     let target = message.mentions.users.first();
     let amount = parseInt(args[1]);
