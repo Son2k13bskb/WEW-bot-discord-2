@@ -318,8 +318,6 @@ if (cmd === "rt") {
     message.reply(`-${formatMoney(amount)} từ ${target}`);
   }
 
- 
-  // CƯỢC
 
 // CƯỢC
   else if (cmd === "cf") {
@@ -373,7 +371,7 @@ if (cmd === "rt") {
 
     await new Promise(r => setTimeout(r, 500));
 
-    let win = Math.random() < 0.5;
+    let win = Math.random() < 0.6; // 60% cơ hội thắng
 
     if (win) {
       money.set(userId, cash + bet);
