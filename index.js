@@ -96,7 +96,9 @@ client.on("messageCreate", async (message) => {
     money.set(userId, 10000);
   }
 
-  // MENU
+  // =======================
+  // 📜 MENU
+  // =======================
   if (cmd === "menu") {
     const embed = new EmbedBuilder()
       .setColor("#f5d400")
@@ -126,47 +128,46 @@ client.on("messageCreate", async (message) => {
     return message.reply({ embeds: [embed] });
   }
 
-// =======================
-// 🏦 CHECK NGÂN HÀNG
-// =======================
-if (cmd === "checknh") {
-  updateBank(userId);
+  // =======================
+  // 🏦 CHECK NGÂN HÀNG
+  // =======================
+  else if (cmd === "checknh") {
+    updateBank(userId);
 
-  let username = message.author.username;
+    let username = message.author.username;
 
-  let embed = new EmbedBuilder()
-    .setColor("#00f539")
-    .setTitle(`🏦 SỔ TIẾT KIỆM TÍN DỤNG: ${username}`);
+    let embed = new EmbedBuilder()
+      .setColor("#00f539")
+      .setTitle(`🏦 SỔ TIẾT KIỆM TÍN DỤNG: ${username}`);
 
-  let desc = "";
+    let desc = "";
 
-  for (let key in banks) {
-    let bank = banks[key];
+    for (let key in banks) {
+      let bank = banks[key];
 
-    let amount = 0;
+      let amount = 0;
 
-    if (bankData.has(userId)) {
-      let data = bankData.get(userId);
-      if (data.bank === key) {
-        amount = data.amount;
+      if (bankData.has(userId)) {
+        let data = bankData.get(userId);
+        if (data.bank === key) {
+          amount = data.amount;
+        }
       }
+
+      desc += `💵 ${bank.name}\n`;
+      desc += `${formatMoney(amount)} xu (Lãi ${(bank.interest * 100).toFixed(0)}%/${bank.duration / 86400000} ngày)\n\n`;
     }
 
-    desc += `💵 ${bank.name}\n`;
-    desc += `${formatMoney(amount)} xu (Lãi ${(bank.interest * 100).toFixed(0)}%/${bank.duration / 86400000} ngày)\n\n`;
+    embed.setDescription(desc);
+    embed.setFooter({ text: "WEW BOT ● MADE BY CAUBEVOTRI" });
+
+    return message.reply({ embeds: [embed] });
   }
-
-  embed.setDescription(desc);
-  embed.setFooter({ text: "WEW BOT ● MADE BY CAUBEVOTRI" });
-  
-
-  return message.reply({ embeds: [embed] });
-}
 
   // =======================
   // 💰 XEM XU
   // =======================
-  if (cmd === "xu") {
+  else if (cmd === "xu") {
     updateBank(userId);
 
     let cash = money.get(userId);
@@ -177,13 +178,13 @@ if (cmd === "checknh") {
       bankInfo = `\n🏦 ${banks[data.bank].name}: ${formatMoney(data.amount)} xu`;
     }
 
-    message.reply(`💰 ví: ${formatMoney(cash)} xu${bankInfo}`);
+    return message.reply(`💰 ví: ${formatMoney(cash)} xu${bankInfo}`);
   }
 
   // =======================
   // 🏦 GỬI NGÂN HÀNG
   // =======================
-  if (cmd === "gt") {
+  else if (cmd === "gt") {
     let amount = parseInt(args[args.length - 1]);
     let bankInput = args.slice(0, -1).join(" ");
 
@@ -225,57 +226,57 @@ if (cmd === "checknh") {
 
     money.set(userId, cash - amount);
 
-    message.reply(
+    return message.reply(
       `🏦 gửi ${formatMoney(amount)} vào ${bank.name}\n📈 ${(bank.interest * 100).toFixed(0)}% / ${bank.duration / 86400000} ngày`
     );
   }
 
   // =======================
-// 🏦 RÚT NGÂN HÀNG
-// =======================
-if (cmd === "rt") {
-  let amount = parseInt(args[args.length - 1]);
-  let bankInput = args.slice(0, -1).join(" ");
+  // 🏦 RÚT NGÂN HÀNG
+  // =======================
+  else if (cmd === "rt") {
+    let amount = parseInt(args[args.length - 1]);
+    let bankInput = args.slice(0, -1).join(" ");
 
-  let bankKey = findBank(bankInput);
+    let bankKey = findBank(bankInput);
 
-  if (!bankInput) return message.reply("Thiếu tên ngân hàng!");
-  if (!bankKey) return message.reply("Ngân hàng không tồn tại!");
-  if (isNaN(amount) || amount <= 0) return message.reply("Số xu không hợp lệ!");
+    if (!bankInput) return message.reply("Thiếu tên ngân hàng!");
+    if (!bankKey) return message.reply("Ngân hàng không tồn tại!");
+    if (isNaN(amount) || amount <= 0) return message.reply("Số xu không hợp lệ!");
 
-  if (!bankData.has(userId)) {
-    return message.reply("Bạn không có xu trong ngân hàng này");
+    if (!bankData.has(userId)) {
+      return message.reply("Bạn không có xu trong ngân hàng này");
+    }
+
+    updateBank(userId);
+
+    let data = bankData.get(userId);
+
+    if (data.bank !== bankKey) {
+      return message.reply("Bạn không có xu trong ngân hàng này");
+    }
+
+    if (amount > data.amount) {
+      return message.reply("Không đủ xu trong ngân hàng");
+    }
+
+    data.amount -= amount;
+
+    if (data.amount <= 0) {
+      bankData.delete(userId);
+    } else {
+      bankData.set(userId, data);
+    }
+
+    money.set(userId, money.get(userId) + amount);
+
+    return message.reply(`đã rút ${formatMoney(amount)} xu từ ${banks[bankKey].name}`);
   }
-
-  updateBank(userId);
-
-  let data = bankData.get(userId);
-
-  if (data.bank !== bankKey) {
-    return message.reply("Bạn không có xu trong ngân hàng này");
-  }
-
-  if (amount > data.amount) {
-    return message.reply("Không đủ xu trong ngân hàng");
-  }
-
-  data.amount -= amount;
-
-  if (data.amount <= 0) {
-    bankData.delete(userId);
-  } else {
-    bankData.set(userId, data);
-  }
-
-  money.set(userId, money.get(userId) + amount);
-
-  message.reply(`đã rút ${formatMoney(amount)} xu từ ${banks[bankKey].name}`);
-}
 
   // =======================
   // 👑 ADD XU
   // =======================
-  if (cmd === "addxu" || cmd === "add") {
+  else if (cmd === "addxu" || cmd === "add") {
     if (!allowedIDs.includes(userId)) {
       return message.reply("Không có quyền sử dụng lệnh này!");
     }
@@ -292,13 +293,13 @@ if (cmd === "rt") {
 
     money.set(target.id, money.get(target.id) + amount);
 
-    message.reply(`+${formatMoney(amount)} cho ${target}`);
+    return message.reply(`+${formatMoney(amount)} cho ${target}`);
   }
 
   // =======================
   // 💸 THU XU
   // =======================
-  if (cmd === "thuxu" || cmd === "thu") {
+  else if (cmd === "thuxu" || cmd === "thu") {
     if (!allowedIDs.includes(userId)) {
       return message.reply("Không có quyền sử dụng lệnh này!");
     }
@@ -315,14 +316,14 @@ if (cmd === "rt") {
 
     money.set(target.id, current - amount);
 
-    message.reply(`-${formatMoney(amount)} từ ${target}`);
+    return message.reply(`-${formatMoney(amount)} từ ${target}`);
   }
 
   // =======================
   // 🎲 CƯỢC
   // =======================
-  const crypto = require('crypto');
-  if (cmd === "cf") {
+  else if (cmd === "cf") {
+    const crypto = require('crypto');
     let betArg = args[0];
     let cash = money.get(userId);
 
@@ -351,22 +352,22 @@ if (cmd === "rt") {
 
     await new Promise(r => setTimeout(r, 1000));
 
-  const randomByte = crypto.randomBytes(1)[0]; // Trả về 1 số ngẫu nhiên từ 0 đến 255
-  let win = randomByte < 128; // Có 128 số nhỏ hơn 128 -> Tỉ lệ đúng 50/50
+    const randomByte = crypto.randomBytes(1)[0];
+    let win = randomByte < 128;
 
-  if (win) {
+    if (win) {
       money.set(userId, cash + bet);
-      msg.edit(`🎉 +${formatMoney(bet)} xu`);
+      return msg.edit(`🎉 +${formatMoney(bet)} xu`);
     } else {
       money.set(userId, cash - bet);
-      msg.edit(`❌ -${formatMoney(bet)} xu`);
+      return msg.edit(`❌ -${formatMoney(bet)} xu`);
     }
   }
 
   // =======================
   // 🎁 GIVE
   // =======================
-  if (cmd === "givexu" || cmd === "give") {
+  else if (cmd === "givexu" || cmd === "give") {
     let target = message.mentions.users.first();
     let amount = parseInt(args[1]);
 
@@ -387,7 +388,7 @@ if (cmd === "rt") {
     money.set(userId, cash - amount);
     money.set(target.id, money.get(target.id) + amount);
 
-    message.reply(`đã gửi ${formatMoney(amount)} cho ${target}`);
+    return message.reply(`đã gửi ${formatMoney(amount)} cho ${target}`);
   }
 
 });
