@@ -176,8 +176,8 @@ client.on("messageCreate", async (message) => {
           amount = data.amount;
         }
       }
-      desc += `🏦 ${bank.name}\n`;
-      desc += `${formatMoney(amount)} Xu (Lãi ${(bank.interest * 100).toFixed(0)}%/${bank.duration / 86400000} ngày)\n\n`;
+      desc += "`🏦 ${bank.name}\n`";
+      desc += "`${formatMoney(amount)}` Xu (Lãi ${(bank.interest * 100).toFixed(0)}%/${bank.duration / 86400000} ngày)\n\n";
     }
 
     embed.setDescription(desc);
@@ -346,7 +346,7 @@ client.on("messageCreate", async (message) => {
     if (win) {
       money.set(userId, cash + bet);
       saveData(); // <--- Lưu file
-      return msg.edit(`🎉 Chúc mừng thắng lớn, bạn đã nhận thêm ${formatMoney(bet)} xu!`);
+      return msg.edit(`🎉 Chúc mừng thắng lớn, bạn đã nhận thêm ${formatMoney(bet * 2)} xu!`);
     } else {
       money.set(userId, cash - bet);
       saveData(); // <--- Lưu file
