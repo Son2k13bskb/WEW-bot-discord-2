@@ -176,8 +176,8 @@ client.on("messageCreate", async (message) => {
           amount = data.amount;
         }
       }
-      desc += "`🏦 ${bank.name}\n`";
-      desc += "`${formatMoney(amount)}` Xu (Lãi ${(bank.interest * 100).toFixed(0)}%/${bank.duration / 86400000} ngày)\n\n";
+      desc += `🏦 ${bank.name}\n`;
+      desc += `**${formatMoney(amount)} Xu** (Lãi ${(bank.interest * 100).toFixed(0)}%/${bank.duration / 86400000} ngày)\n\n`;
     }
 
     embed.setDescription(desc);
