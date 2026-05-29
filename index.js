@@ -169,7 +169,7 @@ client.on("messageCreate", async (message) => {
     return message.reply({ embeds: [embed] });
   }
 
-  // LỆNH DAILY 
+// LỆNH DAILY 
   if (cmd === "daily") {
     const now = Date.now();
     const nextDailyTime = dailyCooldown.get(userId) || 0;
@@ -181,7 +181,7 @@ client.on("messageCreate", async (message) => {
       let m = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
       let s = Math.floor((timeLeft % (1000 * 60)) / 1000);
       
-      return message.reply(`⏱️ Cần đợi ${h}H ${m}M ${s}S để nhận phần thưởng`);
+      return message.reply(`⏱️ Cần đợi ${h}H ${m}M ${s}S để nhận tiếp chuỗi`);
     }
 
     // Lấy thời gian hiện tại theo múi giờ Việt Nam
@@ -195,7 +195,8 @@ client.on("messageCreate", async (message) => {
     const diffMs = nextMidnightVn.getTime() - vnTime.getTime();
     const newNextDaily = now + diffMs;
 
-    let currentStreak = streakData.get(userId) || 0;
+    // +1 chuỗi NGAY TỪ ĐẦU để lần đầu nhận sẽ là chuỗi 1
+    let currentStreak = (streakData.get(userId) || 0) + 1;
     let reward = 0;
 
     // Tính toán phần thưởng theo chuỗi
@@ -203,16 +204,16 @@ client.on("messageCreate", async (message) => {
       reward = Math.floor(Math.random() * (600 - 300 + 1)) + 300;
     } else if (currentStreak <= 30) {
       reward = Math.floor(Math.random() * (900 - 700 + 1)) + 700;
-    } else if (currentStreak < 60) {
+    } else if (currentStreak <= 60) {
       reward = Math.floor(Math.random() * (2000 - 1000 + 1)) + 1000;
-    } else { // Chuỗi 60 trở lên
+    } else { // Chuỗi 61 trở lên
       reward = Math.floor(Math.random() * (3500 - 2100 + 1)) + 2100;
     }
 
     // Cập nhật Database
     let currentCash = money.get(userId) || 10000;
     money.set(userId, currentCash + reward);
-    streakData.set(userId, currentStreak + 1);
+    streakData.set(userId, currentStreak); // Lưu thẳng currentStreak vì đã +1 ở trên
     dailyCooldown.set(userId, newNextDaily);
     saveData(); // Lưu ngay dữ liệu
 
@@ -224,7 +225,7 @@ client.on("messageCreate", async (message) => {
     return message.reply(
       `💰 ${message.author.username} đã nhận phần thưởng là ${formatMoney(reward)} xu 💵\n` +
       `🔥 chuỗi hôm nay là: ${currentStreak}\n` +
-      `⏱️ Cần đợi ${h}H ${m}M ${s}S để nhận phần thưởng`
+      `⏱️ Cần đợi ${h}H ${m}M ${s}S để nhận tiếp phần thưởng`
     );
   }
 
