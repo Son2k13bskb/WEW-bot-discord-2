@@ -181,7 +181,7 @@ client.on("messageCreate", async (message) => {
       let m = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
       let s = Math.floor((timeLeft % (1000 * 60)) / 1000);
       
-      return message.reply(`⏱️ Cần đợi ${h}H ${m}M ${s}S để nhận tiếp chuỗi`);
+      return message.reply(`⏱️ Cần đợi ${h}H ${m}M ${s}S để nhận phần thưởng`);
     }
 
     // Lấy thời gian hiện tại theo múi giờ Việt Nam
@@ -224,7 +224,7 @@ client.on("messageCreate", async (message) => {
     return message.reply(
       `💰 ${message.author.username} đã nhận phần thưởng là ${formatMoney(reward)} xu 💵\n` +
       `🔥 chuỗi hôm nay là: ${currentStreak}\n` +
-      `⏱️ Cần đợi ${h}H ${m}M ${s}S để nhận tiếp phần thưởng`
+      `⏱️ Cần đợi ${h}H ${m}M ${s}S để nhận phần thưởng`
     );
   }
 
