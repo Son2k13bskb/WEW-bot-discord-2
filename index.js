@@ -75,7 +75,7 @@ const banks = {
     name: "VietComBank",
     aliases: ["vietcombank", "vietcom bank", "vcb", "vietcom"],
     interest: 0.05,
-    duration: 3 * 24 * 60 * 60 * 1000
+    duration: 2 * 24 * 60 * 60 * 1000
   }
 };
 
@@ -136,7 +136,7 @@ client.on("messageCreate", async (message) => {
     const embed = new EmbedBuilder()
       .setColor("#f5d400")
       .setTitle("🏛️ Các lệnh của WEW")
-      .setDescription("Danh sách các lệnh hiện có của bot")
+      .setDescription("Danh sách các lệnh của bot")
       .addFields({
         name: "💰 Lệnh bình thường",
         value:
@@ -163,8 +163,8 @@ client.on("messageCreate", async (message) => {
     updateBank(userId);
     let username = message.author.username;
     let embed = new EmbedBuilder()
-      .setColor("#00ff26")
-      .setTitle(`🏦 SỔ TIẾT KIỆM TÍN DỤNG: ${username}`);
+      .setColor("#00ff26c3")
+      .setTitle(`🏦 SỔ TIẾT KIỆM TÍN DỤNG: **${username}**`);
 
     let desc = "";
     for (let key in banks) {
@@ -176,8 +176,8 @@ client.on("messageCreate", async (message) => {
           amount = data.amount;
         }
       }
-      desc += `🏦 ${bank.name}\n`;
-      desc += `**${formatMoney(amount)} Xu** (Lãi ${(bank.interest * 100).toFixed(0)}%/${bank.duration / 86400000} ngày)\n\n`;
+      desc += `💵 ${bank.name}\n`;
+      desc += `**${formatMoney(amount)} xu** (Lãi ${(bank.interest * 100).toFixed(0)}%/${bank.duration / 86400000} ngày)\n\n`;
     }
 
     embed.setDescription(desc);
@@ -189,7 +189,7 @@ client.on("messageCreate", async (message) => {
   // XEM TIỀN
   if (cmd === "xu") {
     let cash = money.get(userId);
-    message.reply(`💰 Số xu trong ví của bạn là: ${formatMoney(cash)} xu`);
+    message.reply(`💰 Số xu trong ví của bạn là: **${formatMoney(cash)} xu**`);
   }
 
   // GỬI NGÂN HÀNG
@@ -232,8 +232,7 @@ client.on("messageCreate", async (message) => {
     saveData(); // <--- Lưu ngay sau khi chuyển xu
 
     message.reply(
-      `**ĐÃ GỬI THÀNH CÔNG** Bạn đã gửi ${formatMoney(amount)} vào ${bank.name}\n📈 ${(bank.interest * 100).toFixed(0)}% / ${bank.duration / 86400000} ngày`
-    );
+      `**ĐÃ GỬI THÀNH CÔNG:** Bạn đã gửi **${formatMoney(amount)} xu** vào ngân hàng **${bank.name}**`);
   }
 
   // RÚT NGÂN HÀNG
@@ -264,7 +263,7 @@ client.on("messageCreate", async (message) => {
     money.set(userId, money.get(userId) + amount);
     saveData(); // <--- Lưu ngay sau khi rút xu
 
-    message.reply(`**ĐÃ RÚT THÀNH CÔNG** Bạn đã rút ${formatMoney(amount)} xu từ ${banks[bankKey].name}`);
+    message.reply(`**ĐÃ RÚT THÀNH CÔNG:** Bạn đã rút **${formatMoney(amount)} xu** khỏi ngân hàng **${banks[bankKey].name}**`);
   }
 
   // ADD XU
@@ -281,7 +280,7 @@ client.on("messageCreate", async (message) => {
     money.set(target.id, money.get(target.id) + amount);
     saveData(); // <--- Lưu file
 
-    message.reply(`Đã thêm ${formatMoney(amount)} xu cho ${target}`);
+    message.reply(`Đã thêm **${formatMoney(amount)} xu** cho ${target}`);
   }
 
   // THU XU
@@ -300,7 +299,7 @@ client.on("messageCreate", async (message) => {
     money.set(target.id, current - amount);
     saveData(); // <--- Lưu file
 
-    message.reply(`Đã thu ${formatMoney(amount)} xu từ ${target}`);
+    message.reply(`Đã thu **${formatMoney(amount)} xu** từ ${target}`);
   }
 
   // CƯỢC
@@ -313,7 +312,7 @@ client.on("messageCreate", async (message) => {
     if (now < cd) {
       let t = Math.floor(cd / 1000);
       let timeLeft = cd - now;
-      let warningMsg = await message.reply(`⏱ Cần đợi <t:${t}:R> để cược tiếp!`);
+      let warningMsg = await message.reply(`⏱ Cần đợi thêm <t:${t}:R> để cược tiếp!`);
       setTimeout(() => {
         warningMsg.delete().catch(() => {}); 
       }, timeLeft);
@@ -346,11 +345,11 @@ client.on("messageCreate", async (message) => {
     if (win) {
       money.set(userId, cash + bet);
       saveData(); // <--- Lưu file
-      return msg.edit(`🎉 Chúc mừng thắng lớn, bạn đã nhận thêm ${formatMoney(bet * 2)} xu!`);
+      return msg.edit(`🎉 Chúc mừng thắng lớn, đã nhận về **${formatMoney(bet * 2)} xu**!`);
     } else {
       money.set(userId, cash - bet);
       saveData(); // <--- Lưu file
-      return msg.edit(`❌ Bạn đã cược ${formatMoney(bet)} xu và mất tất cả`);
+      return msg.edit(`❌ Đã cược **${formatMoney(bet)} xu** và mất tất cả`);
     }
   }
 
@@ -365,7 +364,7 @@ client.on("messageCreate", async (message) => {
 
     let cash = money.get(userId);
     if (amount > cash) {
-      return message.reply(`Bạn có ${formatMoney(cash)}`);
+      return message.reply(`Số xu của bạn không đủ! Bạn có **${formatMoney(cash)} xu**`);
     }
 
     if (!money.has(target.id)) {
@@ -376,7 +375,7 @@ client.on("messageCreate", async (message) => {
     money.set(target.id, money.get(target.id) + amount);
     saveData(); // <--- Lưu file
 
-    message.reply(`Bạn đã gửi ${formatMoney(amount)} cho ${target}`);
+    message.reply(`Bạn đã chuyển **${formatMoney(amount)} xu** cho ${target}`);
   }
 
 });
