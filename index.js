@@ -198,7 +198,7 @@ client.on("messageCreate", async (message) => {
     let bankInput = args.slice(0, -1).join(" ");
     let bankKey = findBank(bankInput);
 
-    if (!bankInput) return message.reply("Thiếu tên ngân hàng!");
+    if (!bankInput) return message.reply("⚠️ Thiếu tên ngân hàng!");
     if (!bankKey) return message.reply("Ngân hàng không tồn tại!");
     if (isNaN(amount) || amount <= 0) return message.reply("Số xu không hợp lệ!");
 
@@ -241,7 +241,7 @@ client.on("messageCreate", async (message) => {
     let bankInput = args.slice(0, -1).join(" ");
     let bankKey = findBank(bankInput);
 
-    if (!bankInput) return message.reply("Thiếu tên ngân hàng cần rút!");
+    if (!bankInput) return message.reply("⚠️ Thiếu tên ngân hàng cần rút!");
     if (!bankKey) return message.reply("Ngân hàng không tồn tại!");
     if (isNaN(amount) || amount <= 0) return message.reply("Số xu không hợp lệ!");
     if (!bankData.has(userId)) return message.reply("Bạn không có xu trong ngân hàng này!");
@@ -268,12 +268,12 @@ client.on("messageCreate", async (message) => {
 
   // ADD XU
   if (cmd === "addxu" || cmd === "add") {
-    if (!allowedIDs.includes(userId)) return message.reply("Không có quyền sử dụng lệnh này!");
+    if (!allowedIDs.includes(userId)) return message.reply("❌ Bạn không có quyền sử dụng lệnh này!");
 
     let target = message.mentions.users.first();
     let amount = parseInt(args[1]);
 
-    if (!target) return message.reply("Thiếu người cần add!");
+    if (!target) return message.reply("⚠️ Thiếu người cần add!");
     if (isNaN(amount) || amount <= 0) return message.reply("Số xu không hợp lệ!");
     if (!money.has(target.id)) money.set(target.id, 10000);
 
@@ -285,12 +285,12 @@ client.on("messageCreate", async (message) => {
 
   // THU XU
   if (cmd === "thuxu" || cmd === "thu") {
-    if (!allowedIDs.includes(userId)) return message.reply("Không có quyền sử dụng lệnh này!");
+    if (!allowedIDs.includes(userId)) return message.reply("❌ Bạn không có quyền sử dụng lệnh này!");
 
     let target = message.mentions.users.first();
     let amount = parseInt(args[1]);
 
-    if (!target) return message.reply("Thiếu người cần thu!");
+    if (!target) return message.reply("⚠️ Thiếu người cần thu!");
     if (isNaN(amount) || amount <= 0) return message.reply("Số xu không hợp lệ!");
 
     let current = money.get(target.id) || 10000;
@@ -300,6 +300,27 @@ client.on("messageCreate", async (message) => {
     saveData(); // <--- Lưu file
 
     message.reply(`Đã thu **${formatMoney(amount)} xu** từ ${target}`);
+  }
+  // CHECK XU NGƯỜI KHÁC
+  if (cmd === "checkxu") {
+    if (!allowedIDs.includes(userId)) {
+      return message.reply("❌ Bạn không có quyền sử dụng lệnh này!");
+    }
+
+    let target = message.mentions.users.first();
+
+    if (!target) {
+      return message.reply("⚠️ Thiếu tên người cần check!");
+    }
+
+    // Lấy số xu hiện tại của người đó. Nếu chưa từng dùng bot, mặc định là 10000 như logic cấp tân thủ của bạn.
+    let targetCash = money.get(target.id);
+    if (targetCash === undefined) {
+      targetCash = 10000;
+    }
+
+    // Gửi tin nhắn báo số xu
+    message.reply(`🔍 Số xu hiện tại của **${target.username}** là: **${formatMoney(targetCash)} xu**`);
   }
 
   // CƯỢC
@@ -321,7 +342,7 @@ client.on("messageCreate", async (message) => {
 
     let bet = betArg === "all" ? cash : parseInt(betArg);
 
-    if (!betArg) return message.reply("Thiếu số xu muốn cược!");
+    if (!betArg) return message.reply("⚠️ Thiếu số xu muốn cược!");
     if (isNaN(bet) || bet <= 0) return message.reply("Số xu không hợp lệ!");
     if (bet > cash) return message.reply("Không đủ xu để cược!");
 
@@ -358,7 +379,7 @@ client.on("messageCreate", async (message) => {
     let target = message.mentions.users.first();
     let amount = parseInt(args[1]);
 
-    if (!target) return message.reply("Thiếu tên người cần chuyển!");
+    if (!target) return message.reply("⚠️ Thiếu tên người cần chuyển!");
     if (target.id === userId) return message.reply("Không thể chuyển cho chính bản thân!");
     if (isNaN(amount) || amount <= 0) return message.reply("Số xu không hợp lệ!");
 
