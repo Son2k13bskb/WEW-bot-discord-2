@@ -164,7 +164,7 @@ client.on("messageCreate", async (message) => {
     updateBank(userId);
     let username = message.author.username;
     let embed = new EmbedBuilder()
-      .setColor("#00ff26c3")
+      .setColor("#00aaff")
       .setTitle(`🏦 SỔ TIẾT KIỆM TÍN DỤNG: **${username}**`);
 
     let desc = "";
