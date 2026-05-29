@@ -1,24 +1,12 @@
-const fs = require('fs');
-const path = require('path');
-const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
-
 function formatMoney(num) {
   return Math.floor(num).toLocaleString("vi-VN");
 }
 
-
+const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent]
 });
-
-// ==========================================
-// CẤU HÌNH LƯU DỮ LIỆU BẰNG VOLUME RAILWAY
-// ==========================================
-// Thay '/app/data' bằng Mount Path bạn đã cài đặt trong Volume trên Railway
-const DATA_DIR = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/app/data';
-const moneyFile = path.join(DATA_DIR, 'money.json');
-const bankDataFile = path.join(DATA_DIR, 'bankData.json');
 
 const PREFIX = "wew";
 
@@ -31,55 +19,7 @@ const allowedIDs = [
 // database
 const money = new Map();
 const cooldown = new Map();
-const bankData = new Map();
 
-// ==========================================
-// HÀM TẢI & LƯU DỮ LIỆU
-// ==========================================
-function loadData() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
-
-  // Tải dữ liệu tiền trong ví
-  if (fs.existsSync(moneyFile)) {
-    const rawMoney = fs.readFileSync(moneyFile, 'utf-8');
-    const parsedMoney = JSON.parse(rawMoney);
-    for (const [key, value] of Object.entries(parsedMoney)) {
-      money.set(key, value);
-    }
-  }
-
-  // Tải dữ liệu ngân hàng
-  if (fs.existsSync(bankDataFile)) {
-    const rawBank = fs.readFileSync(bankDataFile, 'utf-8');
-    const parsedBank = JSON.parse(rawBank);
-    for (const [key, value] of Object.entries(parsedBank)) {
-      bankData.set(key, value);
-    }
-  }
-  console.log("✅ Đã tải xong dữ liệu từ Volume!");
-}
-
-function saveData() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
-  
-  // Chuyển Map thành Object để lưu thành JSON
-  fs.writeFileSync(moneyFile, JSON.stringify(Object.fromEntries(money), null, 2), 'utf-8');
-  fs.writeFileSync(bankDataFile, JSON.stringify(Object.fromEntries(bankData), null, 2), 'utf-8');
-}
-
-// Gọi hàm tải dữ liệu ngay khi khởi chạy code
-loadData();
-
-// Tự động lưu dữ liệu sau mỗi 30 giây
-setInterval(() => {
-  saveData();
-}, 30 * 1000); 
-
-// ==========================================
 
 // NGÂN HÀNG
 
@@ -98,7 +38,7 @@ const banks = {
   }
 };
 
-
+const bankData = new Map();
 
 
 // TÌM NGÂN HÀNG
@@ -140,19 +80,12 @@ function updateBank(userId) {
 
     data.lastUpdate += cycles * bank.duration;
     bankData.set(userId, data);
-    
-    // Lưu ngay khi cập nhật lãi suất
-    saveData();
   }
 }
 
-client.once("ready", () => {
-    console.log(`🤖 Bot đã online với tên ${client.user.tag}`);
-});
-
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
-
+  
 
   if (!message.content.toLowerCase().startsWith(PREFIX.toLowerCase())) return;
 
@@ -164,7 +97,6 @@ client.on("messageCreate", async (message) => {
 
   if (!money.has(userId)) {
     money.set(userId, 10000);
-    saveData(); // Lưu ngay khi tạo acc mới
   }
 
   // MENU
@@ -198,40 +130,48 @@ client.on("messageCreate", async (message) => {
     return message.reply({ embeds: [embed] });
   }
 
-  // CHECK NGÂN HÀNG
-  if (cmd === "checknh") {
-    updateBank(userId);
 
-    let username = message.author.username;
-    let embed = new EmbedBuilder()
-      .setColor("#00ff26")
-      .setTitle(`🏦 SỔ TIẾT KIỆM TÍN DỤNG: ${username}`);
+// CHECK NGÂN HÀNG
 
-    let desc = "";
-    for (let key in banks) {
-      let bank = banks[key];
-      let amount = 0;
+if (cmd === "checknh") {
+  updateBank(userId);
 
-      if (bankData.has(userId)) {
-        let data = bankData.get(userId);
-        if (data.bank === key) {
-          amount = data.amount;
-        }
+  let username = message.author.username;
+
+  let embed = new EmbedBuilder()
+    .setColor("#00ff26")
+    .setTitle(`🏦 SỔ TIẾT KIỆM TÍN DỤNG: ${username}`);
+
+  let desc = "";
+
+  for (let key in banks) {
+    let bank = banks[key];
+
+    let amount = 0;
+
+    if (bankData.has(userId)) {
+      let data = bankData.get(userId);
+      if (data.bank === key) {
+        amount = data.amount;
       }
-
-      desc += `🏦 ${bank.name}\n`;
-      desc += `${formatMoney(amount)} Xu (Lãi ${(bank.interest * 100).toFixed(0)}%/${bank.duration / 86400000} ngày)\n\n`;
     }
 
-    embed.setDescription(desc);
-    embed.setFooter({ text: "WEW BOT ● MADE BY CAUBEVOTRI" });
-
-    return message.reply({ embeds: [embed] });
+    desc += `🏦 ${bank.name}\n`;
+    desc += `${formatMoney(amount)} Xu (Lãi ${(bank.interest * 100).toFixed(0)}%/${bank.duration / 86400000} ngày)\n\n`;
   }
 
-  // XEM TIỀN (Đã bỏ thông tin ngân hàng như bạn yêu cầu ở tin nhắn trước)
-  if (cmd === "xu") {
+  embed.setDescription(desc);
+  embed.setFooter({ text: "WEW BOT ● MADE BY CAUBEVOTRI" });
 
+  return message.reply({ embeds: [embed] });
+}
+
+
+  // XEM TIỀN
+
+// XEM TIỀN
+  if (cmd === "xu") {
+    
     let cash = money.get(userId);
 
     message.reply(`💰 Số xu trong ví của bạn là: ${formatMoney(cash)} xu`);
@@ -281,43 +221,54 @@ client.on("messageCreate", async (message) => {
     }
 
     money.set(userId, cash - amount);
-    saveData(); // LƯU DỮ LIỆU LẬP TỨC
 
     message.reply(
       `**ĐÃ GỬI THÀNH CÔNG** Bạn đã gửi ${formatMoney(amount)} vào ${bank.name}\n📈 ${(bank.interest * 100).toFixed(0)}% / ${bank.duration / 86400000} ngày`
     );
   }
 
-  // RÚT NGÂN HÀNG
-  if (cmd === "rt") {
-    let amount = parseInt(args[args.length - 1]);
-    let bankInput = args.slice(0, -1).join(" ");
-    let bankKey = findBank(bankInput);
 
-    if (!bankInput) return message.reply("Thiếu tên ngân hàng cần rút!");
-    if (!bankKey) return message.reply("Ngân hàng không tồn tại!");
-    if (isNaN(amount) || amount <= 0) return message.reply("Số xu không hợp lệ!");
-    if (!bankData.has(userId)) return message.reply("Bạn không có xu trong ngân hàng này!");
+// RÚT NGÂN HÀNG
 
-    updateBank(userId);
-    let data = bankData.get(userId);
+if (cmd === "rt") {
+  let amount = parseInt(args[args.length - 1]);
+  let bankInput = args.slice(0, -1).join(" ");
 
-    if (data.bank !== bankKey) return message.reply("Bạn không có xu trong ngân hàng này!");
-    if (amount > data.amount) return message.reply("Không đủ xu trong ngân hàng!");
+  let bankKey = findBank(bankInput);
 
-    data.amount -= amount;
+  if (!bankInput) return message.reply("Thiếu tên ngân hàng cần rút!");
+  if (!bankKey) return message.reply("Ngân hàng không tồn tại!");
+  if (isNaN(amount) || amount <= 0) return message.reply("Số xu không hợp lệ!");
 
-    if (data.amount <= 0) {
-      bankData.delete(userId);
-    } else {
-      bankData.set(userId, data);
-    }
-
-    money.set(userId, money.get(userId) + amount);
-    saveData(); // LƯU DỮ LIỆU LẬP TỨC
-
-    message.reply(`**ĐÃ RÚT THÀNH CÔNG** Bạn đã rút ${formatMoney(amount)} xu từ ${banks[bankKey].name}`);
+  if (!bankData.has(userId)) {
+    return message.reply("Bạn không có xu trong ngân hàng này!");
   }
+
+  updateBank(userId);
+
+  let data = bankData.get(userId);
+
+  if (data.bank !== bankKey) {
+    return message.reply("Bạn không có xu trong ngân hàng này!");
+  }
+
+  if (amount > data.amount) {
+    return message.reply("Không đủ xu trong ngân hàng!");
+  }
+
+  data.amount -= amount;
+
+  if (data.amount <= 0) {
+    bankData.delete(userId);
+  } else {
+    bankData.set(userId, data);
+  }
+
+  money.set(userId, money.get(userId) + amount);
+
+  message.reply(`**ĐÃ RÚT THÀNH CÔNG** Bạn đã rút ${formatMoney(amount)} xu từ ${banks[bankKey].name}`);
+}
+
 
   // ADD XU
 
@@ -337,7 +288,6 @@ client.on("messageCreate", async (message) => {
     }
 
     money.set(target.id, money.get(target.id) + amount);
-    saveData(); // LƯU DỮ LIỆU LẬP TỨC
 
     message.reply(`Đã thêm ${formatMoney(amount)} xu cho ${target}`);
   }
@@ -361,12 +311,12 @@ client.on("messageCreate", async (message) => {
     if (amount > current) return message.reply("Không đủ xu để thu!");
 
     money.set(target.id, current - amount);
-    saveData(); // LƯU DỮ LIỆU LẬP TỨC
 
     message.reply(`Đã thu ${formatMoney(amount)} xu từ ${target}`);
   }
 
-  // CƯỢC
+
+// CƯỢC
   else if (cmd === "cf") {
     let betArg = args[0];
     let cash = money.get(userId);
@@ -376,16 +326,18 @@ client.on("messageCreate", async (message) => {
 
     if (now < cd) {
       let t = Math.floor(cd / 1000);
-      let timeLeft = cd - now; 
+      let timeLeft = cd - now; // Tính thời gian còn lại (mili-giây)
+
+      // 1. Gửi tin nhắn cảnh báo và chờ lấy object tin nhắn
       let warningMsg = await message.reply(`⏱ Cần đợi <t:${t}:R> để cược tiếp!`);
 
-      
+      // 2. Đặt hẹn giờ tự động xóa tin nhắn sau khi hết timeLeft
       setTimeout(() => {
-
+        // Dùng .catch() để tránh lỗi bot sập nếu tin nhắn đã bị người dùng xóa trước đó
         warningMsg.delete().catch(() => {}); 
       }, timeLeft);
 
-
+      // 3. Chặn không cho code chạy tiếp xuống dưới cược tiền
       return; 
     }
 
@@ -420,11 +372,9 @@ client.on("messageCreate", async (message) => {
 
     if (win) {
       money.set(userId, cash + bet);
-      saveData();
       return msg.edit(`🎉 Chúc mừng thắng lớn, bạn đã nhận thêm ${formatMoney(bet)} xu!`);
     } else {
       money.set(userId, cash - bet);
-      saveData();
       return msg.edit(`❌ Bạn đã cược ${formatMoney(bet)} xu và mất tất cả`);
     }
   }
@@ -443,7 +393,7 @@ client.on("messageCreate", async (message) => {
     let cash = money.get(userId);
 
     if (amount > cash) {
-      return message.reply(`Bạn chỉ có ${formatMoney(cash)} xu`);
+      return message.reply(`Bạn có ${formatMoney(cash)}`);
     }
 
     if (!money.has(target.id)) {
@@ -452,9 +402,8 @@ client.on("messageCreate", async (message) => {
 
     money.set(userId, cash - amount);
     money.set(target.id, money.get(target.id) + amount);
-    saveData(); // LƯU DỮ LIỆU LẬP TỨC
 
-    message.reply(`Bạn đã gửi ${formatMoney(amount)} xu cho ${target}`);
+    message.reply(`Bạn đã gửi ${formatMoney(amount)} cho ${target}`);
   }
 
 });
