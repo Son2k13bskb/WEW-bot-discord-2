@@ -26,6 +26,9 @@ const dataFile = './data.json';
 const money = new Map();
 const cooldown = new Map();
 const bankData = new Map();
+// Thêm Map để lưu daily
+const streakData = new Map();
+const dailyCooldown = new Map();
 
 // Hàm Tải Dữ Liệu từ data.json khi khởi động bot
 function loadData() {
@@ -34,9 +37,11 @@ function loadData() {
     try {
       const parsedData = JSON.parse(rawData);
       for (const [userId, data] of Object.entries(parsedData)) {
-        // Map đúng cấu trúc { "cash": 11100 } của bạn trong ảnh
         if (data && typeof data.cash === 'number') {
           money.set(userId, data.cash);
+          // Tải thêm dữ liệu daily
+          streakData.set(userId, data.streak || 0);
+          dailyCooldown.set(userId, data.nextDaily || 0);
         }
       }
       console.log("✅ Đã tải thành công dữ liệu từ data.json!");
@@ -50,7 +55,11 @@ function loadData() {
 function saveData() {
   let obj = {};
   for (const [userId, cash] of money.entries()) {
-    obj[userId] = { cash: cash }; // Lưu theo định dạng giống hệt ảnh của bạn
+    obj[userId] = { 
+      cash: cash,
+      streak: streakData.get(userId) || 0,
+      nextDaily: dailyCooldown.get(userId) || 0
+    };
   }
   fs.writeFileSync(dataFile, JSON.stringify(obj, null, 2), 'utf-8');
 }
@@ -128,7 +137,7 @@ client.on("messageCreate", async (message) => {
 
   if (!money.has(userId)) {
     money.set(userId, 10000);
-    saveData(); // <--- Lưu ngay khi cấp tiền tân thủ
+    saveData(); 
   }
 
   // MENU
@@ -140,6 +149,7 @@ client.on("messageCreate", async (message) => {
       .addFields({
         name: "💰 Lệnh bình thường",
         value:
+          "🔹 `wew daily`: nhận phần thưởng mỗi ngày\n" +
           "🔹 `wew xu`: xem số xu có trong ví\n" +
           "🔹 `wew cf <số xu/all>`: cược xu 50/50\n" +
           "🔹 `wew givexu @user <số xu>`: tặng xu cho người khác\n" +
@@ -157,6 +167,65 @@ client.on("messageCreate", async (message) => {
       .setFooter({ text: "WEW BOT ● MADE BY CAUBEVOTRI" });
 
     return message.reply({ embeds: [embed] });
+  }
+
+  // LỆNH DAILY 
+  if (cmd === "daily") {
+    const now = Date.now();
+    const nextDailyTime = dailyCooldown.get(userId) || 0;
+
+    // Tính toán thời gian đợi nếu chưa tới ngày mới
+    if (now < nextDailyTime) {
+      const timeLeft = nextDailyTime - now;
+      let h = Math.floor(timeLeft / (1000 * 60 * 60));
+      let m = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
+      let s = Math.floor((timeLeft % (1000 * 60)) / 1000);
+      
+      return message.reply(`⏱️ Cần đợi ${h}H ${m}M ${s}S để nhận tiếp chuỗi`);
+    }
+
+    // Lấy thời gian hiện tại theo múi giờ Việt Nam
+    const vnTime = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Ho_Chi_Minh" }));
+    
+    // Đặt mốc thời gian là 0h sáng hôm sau ở VN
+    const nextMidnightVn = new Date(vnTime);
+    nextMidnightVn.setHours(24, 0, 0, 0); 
+    
+    // Khoảng thời gian từ hiện tại đến 0h sáng mai (tính bằng ms)
+    const diffMs = nextMidnightVn.getTime() - vnTime.getTime();
+    const newNextDaily = now + diffMs;
+
+    let currentStreak = streakData.get(userId) || 0;
+    let reward = 0;
+
+    // Tính toán phần thưởng theo chuỗi
+    if (currentStreak <= 10) {
+      reward = Math.floor(Math.random() * (600 - 300 + 1)) + 300;
+    } else if (currentStreak <= 30) {
+      reward = Math.floor(Math.random() * (900 - 700 + 1)) + 700;
+    } else if (currentStreak < 60) {
+      reward = Math.floor(Math.random() * (2000 - 1000 + 1)) + 1000;
+    } else { // Chuỗi 60 trở lên
+      reward = Math.floor(Math.random() * (3500 - 2100 + 1)) + 2100;
+    }
+
+    // Cập nhật Database
+    let currentCash = money.get(userId) || 10000;
+    money.set(userId, currentCash + reward);
+    streakData.set(userId, currentStreak + 1);
+    dailyCooldown.set(userId, newNextDaily);
+    saveData(); // Lưu ngay dữ liệu
+
+    // Đổi DiffMs ra giờ, phút, giây để báo cáo cho người chơi
+    let h = Math.floor(diffMs / (1000 * 60 * 60));
+    let m = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+    let s = Math.floor((diffMs % (1000 * 60)) / 1000);
+
+    return message.reply(
+      `💰 ${message.author.username} đã nhận phần thưởng là ${formatMoney(reward)} xu 💵\n` +
+      `🔥 chuỗi hôm nay là: ${currentStreak}\n` +
+      `⏱️ Cần đợi ${h}H ${m}M ${s}S để nhận tiếp phần thưởng`
+    );
   }
 
   // CHECK NGÂN HÀNG
@@ -230,7 +299,7 @@ client.on("messageCreate", async (message) => {
     }
 
     money.set(userId, cash - amount);
-    saveData(); // <--- Lưu ngay sau khi chuyển xu
+    saveData(); 
 
     message.reply(
       `**ĐÃ GỬI THÀNH CÔNG:** Bạn đã gửi **${formatMoney(amount)} xu** vào ngân hàng **${bank.name}**`);
@@ -262,7 +331,7 @@ client.on("messageCreate", async (message) => {
     }
 
     money.set(userId, money.get(userId) + amount);
-    saveData(); // <--- Lưu ngay sau khi rút xu
+    saveData(); 
 
     message.reply(`**ĐÃ RÚT THÀNH CÔNG:** Bạn đã rút **${formatMoney(amount)} xu** khỏi ngân hàng **${banks[bankKey].name}**`);
   }
@@ -279,7 +348,7 @@ client.on("messageCreate", async (message) => {
     if (!money.has(target.id)) money.set(target.id, 10000);
 
     money.set(target.id, money.get(target.id) + amount);
-    saveData(); // <--- Lưu file
+    saveData(); 
 
     message.reply(`Đã thêm **${formatMoney(amount)} xu** cho ${target}`);
   }
@@ -298,10 +367,11 @@ client.on("messageCreate", async (message) => {
     if (amount > current) return message.reply("Không đủ xu để thu!");
 
     money.set(target.id, current - amount);
-    saveData(); // <--- Lưu file
+    saveData(); 
 
     message.reply(`Đã thu **${formatMoney(amount)} xu** từ ${target}`);
   }
+  
   // CHECK XU NGƯỜI KHÁC
   if (cmd === "checkxu") {
     if (!allowedIDs.includes(userId)) {
@@ -314,13 +384,11 @@ client.on("messageCreate", async (message) => {
       return message.reply("⚠️ Thiếu tên người cần check!");
     }
 
-    // Lấy số xu hiện tại của người đó. Nếu chưa từng dùng bot, mặc định là 10000 như logic cấp tân thủ của bạn.
     let targetCash = money.get(target.id);
     if (targetCash === undefined) {
       targetCash = 10000;
     }
 
-    // Gửi tin nhắn báo số xu
     message.reply(`🔍 Số xu hiện tại của **${target.username}** là: **${formatMoney(targetCash)} xu**`);
   }
 
@@ -362,15 +430,15 @@ client.on("messageCreate", async (message) => {
     await msg.edit("🎲 kết quả cược của bạn là...");
     await new Promise(r => setTimeout(r, 500));
 
-    let win = Math.random() < 0.6; // 60% cơ hội thắng
+    let win = Math.random() < 0.6; 
 
     if (win) {
       money.set(userId, cash + bet);
-      saveData(); // <--- Lưu file
+      saveData(); 
       return msg.edit(`🎉 Chúc mừng thắng lớn, đã nhận về **${formatMoney(bet * 2)} xu**!`);
     } else {
       money.set(userId, cash - bet);
-      saveData(); // <--- Lưu file
+      saveData(); 
       return msg.edit(`❌ Đã cược **${formatMoney(bet)} xu** và mất tất cả`);
     }
   }
@@ -395,7 +463,7 @@ client.on("messageCreate", async (message) => {
 
     money.set(userId, cash - amount);
     money.set(target.id, money.get(target.id) + amount);
-    saveData(); // <--- Lưu file
+    saveData(); 
 
     message.reply(`Bạn đã chuyển **${formatMoney(amount)} xu** cho ${target}`);
   }
