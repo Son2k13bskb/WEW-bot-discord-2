@@ -263,17 +263,20 @@ client.on("messageCreate", async (message) => {
     message.reply(`💰 Số xu trong ví của bạn là: **${formatMoney(cash)} xu**`);
   }
 
-  // GỬI NGÂN HÀNG
+// GỬI NGÂN HÀNG
   if (cmd === "gt") {
-    let amount = parseInt(args[args.length - 1]);
     let bankInput = args.slice(0, -1).join(" ");
     let bankKey = findBank(bankInput);
+    let cash = money.get(userId);
+
+    // Xử lý nhập "all"
+    let amountArg = args[args.length - 1]?.toLowerCase();
+    let amount = amountArg === "all" ? cash : parseInt(amountArg);
 
     if (!bankInput) return message.reply("⚠️ Thiếu tên ngân hàng!");
     if (!bankKey) return message.reply("Ngân hàng không tồn tại!");
     if (isNaN(amount) || amount <= 0) return message.reply("Số xu không hợp lệ!");
 
-    let cash = money.get(userId);
     if (amount > cash) {
       return message.reply(`Không đủ xu (${formatMoney(cash)})`);
     }
@@ -303,24 +306,29 @@ client.on("messageCreate", async (message) => {
     saveData(); 
 
     message.reply(
-      `**ĐÃ GỬI THÀNH CÔNG:** Bạn đã gửi **${formatMoney(amount)} xu** vào ngân hàng **${bank.name}**`);
+      `**ĐÃ GỬI THÀNH CÔNG:** Bạn đã gửi **${formatMoney(amount)} xu** vào ngân hàng **${bank.name}**`
+    );
   }
 
-  // RÚT NGÂN HÀNG
+// RÚT NGÂN HÀNG
   if (cmd === "rt") {
-    let amount = parseInt(args[args.length - 1]);
     let bankInput = args.slice(0, -1).join(" ");
     let bankKey = findBank(bankInput);
 
     if (!bankInput) return message.reply("⚠️ Thiếu tên ngân hàng cần rút!");
     if (!bankKey) return message.reply("Ngân hàng không tồn tại!");
-    if (isNaN(amount) || amount <= 0) return message.reply("Số xu không hợp lệ!");
     if (!bankData.has(userId)) return message.reply("Bạn không có xu trong ngân hàng này!");
 
     updateBank(userId);
     let data = bankData.get(userId);
 
     if (data.bank !== bankKey) return message.reply("Bạn không có xu trong ngân hàng này!");
+
+    // Xử lý nhập "all" lấy tối đa tiền trong thẻ
+    let amountArg = args[args.length - 1]?.toLowerCase();
+    let amount = amountArg === "all" ? data.amount : parseInt(amountArg);
+
+    if (isNaN(amount) || amount <= 0) return message.reply("Số xu không hợp lệ!");
     if (amount > data.amount) return message.reply("Không đủ xu trong ngân hàng!");
 
     data.amount -= amount;
@@ -354,17 +362,21 @@ client.on("messageCreate", async (message) => {
     message.reply(`Đã thêm **${formatMoney(amount)} xu** cho ${target}`);
   }
 
-  // THU XU
+// THU XU
   if (cmd === "thuxu" || cmd === "thu") {
     if (!allowedIDs.includes(userId)) return message.reply("❌ Bạn không có quyền sử dụng lệnh này!");
 
     let target = message.mentions.users.first();
-    let amount = parseInt(args[1]);
-
+    
     if (!target) return message.reply("⚠️ Thiếu người cần thu!");
-    if (isNaN(amount) || amount <= 0) return message.reply("Số xu không hợp lệ!");
 
     let current = money.get(target.id) || 10000;
+
+    // Xử lý nhập "all" để tịch thu toàn bộ
+    let amountArg = args[1]?.toLowerCase();
+    let amount = amountArg === "all" ? current : parseInt(amountArg);
+
+    if (isNaN(amount) || amount <= 0) return message.reply("Số xu không hợp lệ!");
     if (amount > current) return message.reply("Không đủ xu để thu!");
 
     money.set(target.id, current - amount);
@@ -444,16 +456,19 @@ client.on("messageCreate", async (message) => {
     }
   }
 
-  // GIVE
+// GIVE
   if (cmd === "givexu" || cmd === "give") {
     let target = message.mentions.users.first();
-    let amount = parseInt(args[1]);
+    let cash = money.get(userId);
+
+    // Xử lý nhập "all"
+    let amountArg = args[1]?.toLowerCase();
+    let amount = amountArg === "all" ? cash : parseInt(amountArg);
 
     if (!target) return message.reply("⚠️ Thiếu tên người cần chuyển!");
     if (target.id === userId) return message.reply("Không thể chuyển cho chính bản thân!");
     if (isNaN(amount) || amount <= 0) return message.reply("Số xu không hợp lệ!");
 
-    let cash = money.get(userId);
     if (amount > cash) {
       return message.reply(`Số xu của bạn không đủ! Bạn có **${formatMoney(cash)} xu**`);
     }
