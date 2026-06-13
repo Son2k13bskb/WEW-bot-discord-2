@@ -1,3 +1,6 @@
+const codes = new Map(); 
+const usedCodes = new Map(); 
+const debts = new Map();
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const fs = require('fs'); // Thêm thư viện File System
 const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
@@ -36,12 +39,30 @@ function loadData() {
     try {
       const parsedData = JSON.parse(rawData);
       for (const [userId, data] of Object.entries(parsedData)) {
-        if (data && typeof data.cash === 'number') {
-          money.set(userId, data.cash);
-          // Tải thêm dữ liệu daily
-          streakData.set(userId, data.streak || 0);
-          dailyCooldown.set(userId, data.nextDaily || 0);
-        }
+  if (data && typeof data.cash === 'number') {
+    money.set(userId, data.cash);
+    streakData.set(userId, data.streak || 0);
+    dailyCooldown.set(userId, data.nextDaily || 0);
+
+    if (parsedData._codes) {
+  for (let code in parsedData._codes) {
+    codes.set(code, parsedData._codes[code]);
+  }
+}
+
+if (parsedData._usedCodes) {
+  for (let userId in parsedData._usedCodes) {
+    usedCodes.set(userId, parsedData._usedCodes[userId]);
+  }
+}
+
+    // LOAD NỢ
+    if (data.debts) {
+      for (let key in data.debts) {
+      debts.set(key, data.debts[key]);
+      }
+    }
+  }
       }
       console.log("✅ Đã tải thành công dữ liệu từ data.json!");
     } catch (err) {
@@ -50,16 +71,45 @@ function loadData() {
   }
 }
 
-// Hàm Lưu Dữ Liệu vào data.json
+
 function saveData() {
   let obj = {};
+
   for (const [userId, cash] of money.entries()) {
     obj[userId] = { 
       cash: cash,
       streak: streakData.get(userId) || 0,
-      nextDaily: dailyCooldown.get(userId) || 0
+      nextDaily: dailyCooldown.get(userId) || 0,
+      debts: {}
     };
   }
+
+  // LƯU NỢ
+  for (const [key, value] of debts.entries()) {
+    const [borrower] = key.split("_");
+
+    if (!obj[borrower]) {
+      obj[borrower] = {
+        cash: 10000,
+        streak: 0,
+        nextDaily: 0,
+        debts: {}
+      };
+    }
+
+    obj[borrower].debts[key] = value;
+  }
+
+  obj["_codes"] = {};
+  for (const [code, data] of codes.entries()) {
+    obj["_codes"][code] = data;
+  }
+
+  obj["_usedCodes"] = {};
+  for (const [userId, list] of usedCodes.entries()) {
+    obj["_usedCodes"][userId] = list;
+  }
+
   fs.writeFileSync(dataFile, JSON.stringify(obj, null, 2), 'utf-8');
 }
 
@@ -101,6 +151,12 @@ client.on("interactionCreate", async (interaction) => {
     // chuyển tiền
     money.set(targetId, lenderCash - amount);
     money.set(borrowerId, borrowerCash + amount);
+
+  // GHI NỢ
+    let debtKey = `${borrowerId}_${targetId}`;
+    let oldDebt = debts.get(debtKey) || 0;
+   debts.set(debtKey, oldDebt + amount);
+
     saveData();
 
     await interaction.update({
@@ -213,14 +269,18 @@ client.on("messageCreate", async (message) => {
           "🔹 `wew gt <tên ngân hàng> <số xu>`: gửi xu vào ngân hàng\n" +
           "🔹 `wew rt <tên ngân hàng> <số xu>`: rút xu từ ngân hàng\n" +
           "🔹 `wew checknh`: kiểm tra số dư các ngân hàng\n" +
-          "🔹 `wew vayxu @user <số xu>`: yêu cầu vay xu từ người khác\n",
+          "🔹 `wew vayxu @user <số xu>`: yêu cầu vay xu từ người khác\n" +
+          "🔹 `wew trano @user`: trả nợ cho người vay\n" +
+          "🔹 `wew nhapcode <tên code>`: nhập code để nhận xu\n" +
+          "🔹 `wew topxu`: xem bảng xếp hạng đại gia trong server\n",
       })
       .addFields({
         name: "👑 ADMIN/OWNER",
         value:
           "🔹 `wew addxu <tên người> <số xu>`: thêm xu cho người khác\n" +
           "🔹 `wew thuxu <tên người> <số xu>`: thu xu từ người khác\n"+
-          "🔹 `wew checkxu @user`: kiểm tra số xu của người khác\n",
+          "🔹 `wew checkxu @user`: kiểm tra số xu của người khác\n" +
+          "🔹 `wew addcode <tên code> <số xu> <số lần có thể nhạp>`: thêm code mới\n",
       })
       .setFooter({ text: "WEW BOT ● MADE BY CAUBEVOTRI" });
 
@@ -287,6 +347,140 @@ client.on("messageCreate", async (message) => {
     );
   }
 
+// Lệnh Top xu
+if (cmd === "topxu") {
+  let guild = message.guild;
+
+  if (!guild) return;
+
+  // lấy member trong server
+  let members = await guild.members.fetch();
+
+  let list = [];
+
+  members.forEach(member => {
+    if (member.user.bot) return;
+
+    let cash = money.get(member.id) || 10000;
+
+    list.push({
+      id: member.id,
+      name: member.user.username,
+      cash: cash
+    });
+  });
+
+  // sort giảm dần
+  list.sort((a, b) => b.cash - a.cash);
+
+  let result = "";
+  let rank = 0;
+  let lastCash = null;
+  let displayCount = 0;
+
+  for (let i = 0; i < list.length; i++) {
+    let user = list[i];
+
+    // nếu tiền khác thì tăng rank
+    if (user.cash !== lastCash) {
+      rank = rank + 1;
+    }
+
+    // chỉ lấy top 10
+    if (rank > 10) break;
+
+    result += `🏅 Top ${rank}: ${user.name}: **${formatMoney(user.cash)} xu**\n`;
+
+    lastCash = user.cash;
+    displayCount++;
+  }
+
+  const embed = new EmbedBuilder()
+    .setColor("#00e1ff")
+    .setTitle("🏆 Bảng Top đại gia nhiều xu nhất:")
+    .setDescription(result || "Không có dữ liệu");
+
+  message.reply({ embeds: [embed] });
+}
+
+// LỆNH ADD CODE
+  if (cmd === "addcode") {
+  if (!allowedIDs.includes(userId)) {
+    return message.reply("❌ Không có quyền dùng lệnh này!");
+  }
+
+  let code = args[0];
+  let reward = parseInt(args[1]);
+  let maxUses = parseInt(args[2]);
+
+  if (!code) return message.reply("⚠️ Thiếu tên code!");
+  if (code.includes(" ")) return message.reply("Code không được có khoảng cách!");
+  if (isNaN(reward) || reward <= 0) return message.reply("Số xu không hợp lệ!");
+  if (isNaN(maxUses) || maxUses <= 0) return message.reply("Số lượt không hợp lệ!");
+
+  if (codes.has(code)) {
+    return message.reply("❌ Code này đã tồn tại!");
+  }
+
+  codes.set(code, {
+    reward: reward,
+    maxUses: maxUses,
+    usedCount: 0
+  });
+
+  saveData();
+
+  const embed = new EmbedBuilder()
+    .setColor("#00ff99")
+    .setTitle("🎁 Đã thêm Code mới")
+    .setDescription(
+      `Code: \`${code}\`\n\n` +
+      `Số lần nhập tối đa: **${maxUses}**`
+    );
+
+  message.reply({ embeds: [embed] });
+}
+
+// LỆNH NHẬP CODE
+if (cmd === "nhapcode") {
+  let code = args[0];
+
+  if (!code) return message.reply("⚠️ Nhập code đi má!");
+
+  if (!codes.has(code)) {
+    return message.reply("❌ Code không tồn tại!");
+  }
+
+  let data = codes.get(code);
+
+  // hết lượt
+  if (data.usedCount >= data.maxUses) {
+    return message.reply("❌ Code này đã hết lượt sử dụng!");
+  }
+
+  // check user đã dùng chưa
+  let userUsed = usedCodes.get(userId) || [];
+
+  if (userUsed.includes(code)) {
+    return message.reply("❌ Bạn đã nhập code này rồi!");
+  }
+
+  // cộng tiền
+  let cash = money.get(userId) || 10000;
+  money.set(userId, cash + data.reward);
+
+  // update data
+  data.usedCount += 1;
+  codes.set(code, data);
+
+  userUsed.push(code);
+  usedCodes.set(userId, userUsed);
+
+  saveData();
+
+  return message.reply(`🎉 Bạn đã nhận được: **${formatMoney(data.reward)} xu**`);
+}
+
 // LỆNH VAY XU
 if (cmd === "vayxu") {
   let target = message.mentions.users.first();
@@ -323,6 +517,51 @@ if (cmd === "vayxu") {
   );
 
   message.reply({ embeds: [embed], components: [row] });
+}
+
+if (cmd === "trano") {
+  let target = message.mentions.users.first();
+
+  if (!target) return message.reply("⚠️ Thiếu người cần trả nợ!");
+
+  let debtKey = `${userId}_${target.id}`;
+  let debt = debts.get(debtKey) || 0;
+
+  // ❌ CASE 1: KHÔNG NỢ
+  if (debt <= 0) {
+    return message.reply("📭 Bạn đang không nợ họ");
+  }
+
+  let cash = money.get(userId) || 0;
+
+  // 💀 CASE 4: KHÔNG CÓ XU
+  if (cash <= 0) {
+    return message.reply("💀 Bro thậm chí còn không có nổi 1 xu để dùng chứ chi là trả nợ");
+  }
+
+  // ✅ CASE 2: TRẢ HẾT
+  if (cash >= debt) {
+    money.set(userId, cash - debt);
+    money.set(target.id, (money.get(target.id) || 10000) + debt);
+
+    debts.delete(debtKey);
+    saveData();
+
+    return message.reply(`✅ Bạn đã trả hết nợ cho ${target}`);
+  }
+
+  // ⚠️ CASE 3: TRẢ 1 PHẦN
+  if (cash < debt) {
+    let remaining = debt - cash;
+
+    money.set(target.id, (money.get(target.id) || 10000) + cash);
+    money.set(userId, 0);
+
+    debts.set(debtKey, remaining);
+    saveData();
+
+    return message.reply(`⚠️ Bạn đã trả 1 phần nợ. Còn thiếu **${formatMoney(remaining)} xu**`);
+  }
 }
 
   // CHECK NGÂN HÀNG
