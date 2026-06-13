@@ -212,7 +212,8 @@ client.on("messageCreate", async (message) => {
           "🔹 `wew givexu @user <số xu>`: tặng xu cho người khác\n" +
           "🔹 `wew gt <tên ngân hàng> <số xu>`: gửi xu vào ngân hàng\n" +
           "🔹 `wew rt <tên ngân hàng> <số xu>`: rút xu từ ngân hàng\n" +
-          "🔹 `wew checknh`: kiểm tra số dư các ngân hàng\n" ,
+          "🔹 `wew checknh`: kiểm tra số dư các ngân hàng\n" +
+          "🔹 `wew vayxu @user <số xu>`: yêu cầu vay xu từ người khác\n",
       })
       .addFields({
         name: "👑 ADMIN/OWNER",
