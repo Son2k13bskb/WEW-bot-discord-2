@@ -404,7 +404,7 @@ if (cmd === "topxu") {
 }
 
 // LỆNH ADD CODE
-  if (cmd === "addcode") {
+if (cmd === "addcode") {
   if (!allowedIDs.includes(userId)) {
     return message.reply("❌ Không có quyền dùng lệnh này!");
   }
@@ -422,10 +422,10 @@ if (cmd === "topxu") {
     return message.reply("❌ Code này đã tồn tại!");
   }
 
+  // ✅ FIX: bỏ usedCount
   codes.set(code, {
     reward: reward,
-    maxUses: maxUses,
-    usedCount: 0
+    maxUses: maxUses
   });
 
   saveData();
@@ -435,7 +435,7 @@ if (cmd === "topxu") {
     .setTitle("🎁 Đã thêm Code mới")
     .setDescription(
       `Code: \`${code}\`\n\n` +
-      `Số lần nhập tối đa: **${maxUses}**`
+      `Số lần nhập tối đa mỗi người: **${maxUses}**`
     );
 
   message.reply({ embeds: [embed] });
@@ -453,26 +453,22 @@ if (cmd === "nhapcode") {
 
   let data = codes.get(code);
 
-  // hết lượt
-  if (data.usedCount >= data.maxUses) {
-    return message.reply("❌ Code này đã hết lượt sử dụng!");
-  }
-
-  // check user đã dùng chưa
+  // lấy list code user đã nhập
   let userUsed = usedCodes.get(userId) || [];
 
-  if (userUsed.includes(code)) {
-    return message.reply("❌ Bạn đã nhập code này rồi!");
+  // đếm số lần nhập code này
+  let usedCount = userUsed.filter(c => c === code).length;
+
+  // ❌ quá số lần
+  if (usedCount >= data.maxUses) {
+    return message.reply(`❌ Bạn đã nhập code này tối đa ${data.maxUses} lần rồi!`);
   }
 
   // cộng tiền
   let cash = money.get(userId) || 10000;
   money.set(userId, cash + data.reward);
 
-  // update data
-  data.usedCount += 1;
-  codes.set(code, data);
-
+  // lưu lịch sử
   userUsed.push(code);
   usedCodes.set(userId, userUsed);
 
