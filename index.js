@@ -1,3 +1,4 @@
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const fs = require('fs'); // Thêm thư viện File System
 const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
 
@@ -69,6 +70,64 @@ loadData();
 setInterval(saveData, 30 * 1000);
 // ==========================================
 
+client.on("interactionCreate", async (interaction) => {
+  if (!interaction.isButton()) return;
+
+  const data = interaction.customId.split("_");
+
+  // ✅ ĐỒNG Ý
+  if (data[0] === "agree") {
+    const targetId = data[1];   // người cho vay
+    const borrowerId = data[2]; // người vay
+    const amount = parseInt(data[3]);
+
+    if (interaction.user.id !== targetId) {
+      return interaction.reply({
+        content: "Bạn không có quyền bấm nút này 🙂",
+        ephemeral: true
+      });
+    }
+
+    let lenderCash = money.get(targetId) || 10000;
+    let borrowerCash = money.get(borrowerId) || 10000;
+
+    if (amount > lenderCash) {
+      return interaction.reply({
+        content: "❌ Không đủ tiền để cho vay!",
+        ephemeral: true
+      });
+    }
+
+    // chuyển tiền
+    money.set(targetId, lenderCash - amount);
+    money.set(borrowerId, borrowerCash + amount);
+    saveData();
+
+    await interaction.update({
+      content: `✅ Đã cho vay **${formatMoney(amount)} xu**`,
+      embeds: [],
+      components: []
+    });
+  }
+
+  // ❌ TỪ CHỐI
+  if (data[0] === "deny") {
+    const targetId = data[1];
+
+    if (interaction.user.id !== targetId) {
+      return interaction.reply({
+        content: "Không phải chuyện của mày 🙂",
+        ephemeral: true
+      });
+    }
+
+    await interaction.update({
+      content: "❌ Đã từ chối cho vay",
+      embeds: [],
+      components: []
+    });
+  }
+});
 
 // NGÂN HÀNG
 const banks = {
@@ -226,6 +285,44 @@ client.on("messageCreate", async (message) => {
       `⏱️ Cần đợi ${h}H ${m}M ${s}S để nhận phần thưởng tiếp theo`
     );
   }
+
+// LỆNH VAY XU
+if (cmd === "vayxu") {
+  let target = message.mentions.users.first();
+  let amount = parseInt(args[1]);
+
+  if (!target) return message.reply("⚠️ Thiếu người cho vay!");
+  if (target.id === userId) return message.reply("Tự vay luôn đi cho nhanh 😐");
+  if (isNaN(amount) || amount <= 0) return message.reply("Số xu không hợp lệ!");
+
+  let targetCash = money.get(target.id) || 10000;
+
+  if (amount > targetCash) {
+    return message.reply(`❌ Người này không đủ xu! Hiện có: **${formatMoney(targetCash)} xu**`);
+  }
+
+  const embed = new EmbedBuilder()
+    .setColor("#f5d400")
+    .setTitle("📩 Yêu cầu vay xu")
+    .setDescription(
+      `👤 Người vay: ${message.author}\n` +
+      `💰 Số tiền: **${formatMoney(amount)} xu**\n\n` +
+      `👉 ${target} hãy bấm nút bên dưới để quyết định`
+    );
+
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`agree_${target.id}_${userId}_${amount}`)
+      .setLabel("Đồng ý")
+      .setStyle(ButtonStyle.Success),
+    new ButtonBuilder()
+      .setCustomId(`deny_${target.id}`)
+      .setLabel("Từ chối")
+      .setStyle(ButtonStyle.Danger)
+  );
+
+  message.reply({ embeds: [embed], components: [row] });
+}
 
   // CHECK NGÂN HÀNG
   if (cmd === "checknh") {
