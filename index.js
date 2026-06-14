@@ -23,7 +23,10 @@ const allowedIDs = [
   "1174672220065366049",
   "1314899740114026529",
   "1506110804871872624",
+  "1498208530111664158",
 ];
+
+const admins = new Set();
 
 const dataFile = './data.json'; 
 
@@ -59,6 +62,11 @@ if (parsedData._usedCodes) {
   }
 }
 
+// LOAD ADMIN
+if (parsedData._admins) {
+  parsedData._admins.forEach(id => admins.add(id));
+}
+
     // LOAD NỢ
     if (data.debts) {
       for (let key in data.debts) {
@@ -74,6 +82,9 @@ if (parsedData._usedCodes) {
   }
 }
 
+function isAdmin(userId) {
+  return allowedIDs.includes(userId) || admins.has(userId);
+}
 
 function saveData() {
   let obj = {};
@@ -112,6 +123,9 @@ function saveData() {
   for (const [userId, list] of usedCodes.entries()) {
     obj["_usedCodes"][userId] = list;
   }
+
+  // SAVE ADMIN
+  obj["_admins"] = Array.from(admins);
 
   fs.writeFileSync(dataFile, JSON.stringify(obj, null, 2), 'utf-8');
 }
@@ -512,7 +526,7 @@ if (cmd === "topxu") {
 
 // LỆNH ADD CODE
 if (cmd === "addcode") {
-  if (!allowedIDs.includes(userId)) {
+  if (!isAdmin(userId)) {
     return message.reply("❌ Không có quyền dùng lệnh này!");
   }
 
@@ -550,7 +564,7 @@ if (cmd === "addcode") {
 
 // LỆNH XÓA CODE
 if (cmd === "recode") {
-  if (!allowedIDs.includes(userId)) {
+  if (!isAdmin(userId)) {
     return message.reply("❌ Không có quyền, đừng có mơ 😏");
   }
 
@@ -611,10 +625,56 @@ if (cmd === "nhapcode") {
   return message.reply(`🎉 Bạn đã nhận được: **${formatMoney(data.reward)} xu**`);
 }
 
+// LỆNH ADD ADMIN
+if (cmd === "addadmin") {
+  if (!isAdmin(userId)) {
+    return message.reply("❌ Không phải owner");
+  }
+
+  let targetId = args[0];
+  if (!targetId) return message.reply("⚠️ wew addadmin <id>");
+
+  if (allowedIDs.includes(targetId)) {
+    return message.reply("Nó là owner rồi");
+  }
+
+  if (admins.has(targetId)) {
+    return message.reply("❌ Đã là admin rồi");
+  }
+
+  admins.add(targetId);
+  saveData();
+
+  return message.reply(`✅ Đã thêm ${targetId} làm admin`);
+}
+
+// LỆNH XÓA ADMIN
+if (cmd === "unadmin") {
+  if (!isAdmin(userId)) {
+    return message.reply("❌ Không phải owner");
+  }
+
+  let targetId = args[0];
+  if (!targetId) return message.reply("⚠️ wew unadmin <id>");
+
+  if (allowedIDs.includes(targetId)) {
+    return message.reply("Owner mà xóa?");
+  }
+
+  if (!admins.has(targetId)) {
+    return message.reply("Nó có phải admin đâu");
+  }
+
+  admins.delete(targetId);
+  saveData();
+
+  return message.reply(`🗑️ Đã xóa admin ${targetId}`);
+}
+
 // Lệnh kéo búa bao
 if (cmd === "keobuabao") {
   if (kbbGames.has(message.channel.id)) {
-    return message.reply("❌ Đang có game rồi, đợi tí đi má 😏");
+    return message.reply("❌ Đang có game rồi, đợi tí đi má!");
   }
 
   const choices = {
@@ -903,30 +963,34 @@ if (cmd === "muaveso") {
 
 // Lệnh adminlist
 if (cmd === "adminlist") {
-  const { EmbedBuilder } = require("discord.js");
+  let list = [];
 
-  let adminNames = [];
-
-  for (const id of allowedIDs) {
+  // OWNER
+  for (let id of allowedIDs) {
     try {
-      const user = await client.users.fetch(id);
-      adminNames.push(`👤 ${user.tag}`);
-    } catch (err) {
-      adminNames.push(`❌ Không tìm thấy user (${id})`);
+      let user = await client.users.fetch(id);
+      list.push(`👑 OWNER: ${user.tag}`);
+    } catch {
+      list.push(`👑 OWNER: ${id}`);
+    }
+  }
+
+  // ADMIN
+  for (let id of admins) {
+    try {
+      let user = await client.users.fetch(id);
+      list.push(`🛡️ ADMIN: ${user.tag}`);
+    } catch {
+      list.push(`🛡️ ADMIN: ${id}`);
     }
   }
 
   const embed = new EmbedBuilder()
-    .setTitle("👑 Danh Sách Admin / Owner")
     .setColor("Gold")
-    .setDescription(
-      adminNames.length > 0
-        ? adminNames.join("\n")
-        : "Bot vô chủ 😭"
-    )
-    .setFooter({ text: `Tổng: ${allowedIDs.length} người` });
+    .setTitle("👑 Danh sách quyền lực")
+    .setDescription(list.join("\n") || "Không có ai 🤡");
 
-  message.channel.send({ embeds: [embed] });
+  return message.reply({ embeds: [embed] });
 }
 
 // LỆNH BẦU CUA
@@ -1132,7 +1196,7 @@ if (cmd === "baucua") {
 
   // ADD XU
   if (cmd === "addxu" || cmd === "add") {
-    if (!allowedIDs.includes(userId)) return message.reply("❌ Bạn không có quyền sử dụng lệnh này!");
+    if (!isAdmin(userId)) return message.reply("❌ Bạn không có quyền sử dụng lệnh này!");
 
     let target = message.mentions.users.first();
     let amount = parseInt(args[1]);
@@ -1149,7 +1213,7 @@ if (cmd === "baucua") {
 
 // THU XU
   if (cmd === "thuxu" || cmd === "thu") {
-    if (!allowedIDs.includes(userId)) return message.reply("❌ Bạn không có quyền sử dụng lệnh này!");
+    if (!isAdmin(userId)) return message.reply("❌ Bạn không có quyền sử dụng lệnh này!");
 
     let target = message.mentions.users.first();
     
@@ -1172,7 +1236,7 @@ if (cmd === "baucua") {
   
   // CHECK XU NGƯỜI KHÁC
   if (cmd === "checkxu") {
-    if (!allowedIDs.includes(userId)) {
+    if (!isAdmin(userId)) {
       return message.reply("❌ Bạn không có quyền sử dụng lệnh này!");
     }
 
