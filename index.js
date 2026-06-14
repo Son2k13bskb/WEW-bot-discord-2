@@ -272,7 +272,8 @@ client.on("messageCreate", async (message) => {
           "🔹 `wew vayxu @user <số xu>`: yêu cầu vay xu từ người khác\n" +
           "🔹 `wew trano @user`: trả nợ cho người vay\n" +
           "🔹 `wew nhapcode <tên code>`: nhập code để nhận xu\n" +
-          "🔹 `wew topxu`: xem bảng xếp hạng đại gia trong server\n",
+          "🔹 `wew topxu`: xem bảng xếp hạng đại gia trong server\n" +
+          "🔹 `wew baucua <lựa chọn> <số xu>`: chơi bầu cua tôm cá (lựa chọn: bau, cua, tom, ca, ga, nai)",
       })
       .addFields({
         name: "👑 ADMIN/OWNER",
@@ -515,49 +516,183 @@ if (cmd === "vayxu") {
   message.reply({ embeds: [embed], components: [row] });
 }
 
+// LỆNH TRẢ NỢ
 if (cmd === "trano") {
   let target = message.mentions.users.first();
 
   if (!target) return message.reply("⚠️ Thiếu người cần trả nợ!");
 
   let debtKey = `${userId}_${target.id}`;
-  let debt = debts.get(debtKey) || 0;
+  let debt = debts.get(debtKey);
 
-  // ❌ CASE 1: KHÔNG NỢ
-  if (debt <= 0) {
-    return message.reply("📭 Bạn đang không nợ họ");
+  // ❌ KHÔNG CÓ NỢ
+  if (!debt || debt <= 0) {
+    return message.reply("📭 Bạn không nợ người này");
   }
 
-  let cash = money.get(userId) || 0;
+  // đảm bảo cả 2 có ví
+  if (!money.has(userId)) money.set(userId, 10000);
+  if (!money.has(target.id)) money.set(target.id, 10000);
 
-  // 💀 CASE 4: KHÔNG CÓ XU
-  if (cash <= 0) {
-    return message.reply("💀 Bro thậm chí còn không có nổi 1 xu để dùng chứ chi là trả nợ");
+  let userCash = money.get(userId);
+  let targetCash = money.get(target.id);
+
+  // 💀 KHÔNG CÓ TIỀN
+  if (userCash <= 0) {
+    return message.reply("💀 Nghèo thế này thì trả kiểu gì?");
   }
 
-  // ✅ CASE 2: TRẢ HẾT
-  if (cash >= debt) {
-    money.set(userId, cash - debt);
-    money.set(target.id, (money.get(target.id) || 10000) + debt);
+  // ✅ TRẢ HẾT
+  if (userCash >= debt) {
+    money.set(userId, userCash - debt);
+    money.set(target.id, targetCash + debt);
 
     debts.delete(debtKey);
     saveData();
 
-    return message.reply(`✅ Bạn đã trả hết nợ cho ${target}`);
+    return message.reply(
+      `💸 Đã trả hết **${formatMoney(debt)} xu** cho ${target}`
+    );
   }
 
-  // ⚠️ CASE 3: TRẢ 1 PHẦN
-  if (cash < debt) {
-    let remaining = debt - cash;
+  // ⚠️ TRẢ MỘT PHẦN
+  let paid = userCash;
+  let remaining = debt - paid;
 
-    money.set(target.id, (money.get(target.id) || 10000) + cash);
-    money.set(userId, 0);
+  money.set(userId, 0);
+  money.set(target.id, targetCash + paid);
 
-    debts.set(debtKey, remaining);
-    saveData();
+  debts.set(debtKey, remaining);
+  saveData();
 
-    return message.reply(`⚠️ Bạn đã trả 1 phần nợ. Còn thiếu **${formatMoney(remaining)} xu**`);
+  return message.reply(
+    `⚠️ Đã trả **${formatMoney(paid)} xu**\nCòn nợ: **${formatMoney(remaining)} xu**`
+  );
+}
+
+// LỆNH KIỂM TRA NỢ
+if (cmd === "checkno") {
+  let list = [];
+
+  for (const [key, amount] of debts.entries()) {
+    let [borrower, lender] = key.split("_");
+
+    // chỉ lấy nợ của người dùng hiện tại
+    if (borrower === userId && amount > 0) {
+      list.push({
+        lenderId: lender,
+        amount: amount
+      });
+    }
   }
+
+  if (list.length === 0) {
+    const embed = new EmbedBuilder()
+      .setColor("#00ff99")
+      .setTitle("📭 Không có khoản nợ nào")
+      .setDescription("Bạn đang sống rất sạch sẽ, không nợ ai đồng nào");
+
+    return message.reply({ embeds: [embed] });
+  }
+
+  let desc = "";
+
+  list.forEach((item, index) => {
+    desc += `💸 ${index + 1}. <@${item.lenderId}>: **${formatMoney(item.amount)} xu**\n`;
+  });
+
+  const embed = new EmbedBuilder()
+    .setColor("#ff4444")
+    .setTitle("📜 Danh sách nợ của bạn")
+    .setDescription(desc)
+    .setFooter({ text: "Trả nợ đi đừng để người ta đòi 😏" });
+
+  return message.reply({ embeds: [embed] });
+}
+
+// LỆNH BẦU CUA
+if (cmd === "baucua") {
+  const animals = ["bau", "cua", "tom", "ca", "ga", "nai"];
+
+  const data = {
+    bau: { name: "Bầu", icon: "🍐" },
+    cua: { name: "Cua", icon: "🦀" },
+    tom: { name: "Tôm", icon: "🦐" },
+    ca: { name: "Cá", icon: "🐟" },
+    ga: { name: "Gà", icon: "🐔" },
+    nai: { name: "Nai", icon: "🦌" }
+  };
+
+  let choice = args[0]?.toLowerCase();
+  let bet = parseInt(args[1]);
+
+  if (!choice || !animals.includes(choice)) {
+    return message.reply("❌ Chọn sai linh vật. Dùng: bau, cua, tom, ca, ga, nai");
+  }
+
+  if (!bet || bet <= 0) {
+    return message.reply("❌ Số xu cược không hợp lệ");
+  }
+
+  let userMoney = money.get(userId) || 0;
+
+  if (userMoney < bet) {
+    return message.reply("❌ Không đủ xu để chơi");
+  }
+
+  // 🎲 quay 3 lần
+  let results = [];
+  for (let i = 0; i < 3; i++) {
+    let rand = animals[Math.floor(Math.random() * animals.length)];
+    results.push(rand);
+  }
+
+  let count = results.filter(r => r === choice).length;
+  let win = 0;
+
+  if (count > 0) {
+    win = bet * count;
+    userMoney += win;
+  } else {
+    userMoney -= bet;
+  }
+
+  money.set(userId, userMoney);
+
+  // 🎨 format đẹp
+  let resultDisplay = results
+    .map(r => `${data[r].icon} ${data[r].name}`)
+    .join(" | ");
+
+  const embed = new EmbedBuilder()
+    .setColor(count > 0 ? "#00ff99" : "#ff4444")
+    .setTitle("🎲 Bầu Cua Tôm Cá")
+    .addFields(
+      {
+        name: "🎯 Lựa chọn của bạn",
+        value: `${data[choice].icon} ${data[choice].name}`,
+        inline: true
+      },
+      {
+        name: "🎲 Kết quả",
+        value: resultDisplay,
+        inline: false
+      },
+      {
+        name: count > 0 ? "💰 Kết quả" : "💸 Kết quả",
+        value:
+          count > 0
+            ? `Trúng **${count} lần**\n+${formatMoney(win)} xu`
+            : `Thua sạch\n-${formatMoney(bet)} xu`
+      },
+      {
+        name: "🏦 Số dư",
+        value: `${formatMoney(userMoney)} xu`
+      }
+    )
+    .setFooter({ text: "Chơi vui thôi, đừng all-in rồi khóc 😏" });
+
+  return message.reply({ embeds: [embed] });
 }
 
   // CHECK NGÂN HÀNG
