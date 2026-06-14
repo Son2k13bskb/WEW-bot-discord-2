@@ -1,8 +1,10 @@
+const lotteryCooldown = new Map();
+const kbbGames = new Map();
 const codes = new Map(); 
 const usedCodes = new Map(); 
 const debts = new Map();
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const fs = require('fs'); // Thêm thư viện File System
+const fs = require('fs');
 const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
 
 function formatMoney(num) {
@@ -10,7 +12,7 @@ function formatMoney(num) {
 }
 
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildMembers]
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent]
 });
 
 const PREFIX = "wew";
@@ -20,6 +22,7 @@ const allowedIDs = [
   "1302541945830375444",
   "1174672220065366049",
   "1314899740114026529",
+  "1506110804871872624",
 ];
 
 const dataFile = './data.json'; 
@@ -183,6 +186,134 @@ client.on("interactionCreate", async (interaction) => {
       components: []
     });
   }
+
+// NÚT KÉO BÚA BAO
+  if (interaction.isButton()) {
+  if (!interaction.customId.startsWith("kbb_")) return;
+
+  let game = kbbGames.get(interaction.channel.id);
+  if (!game) return;
+
+  let choice = interaction.customId.split("_")[1];
+  let userId = interaction.user.id;
+
+  await interaction.reply({
+    content: "💰 Nhập số xu cược:",
+    ephemeral: true
+  });
+
+  const filter = m => m.author.id === userId;
+
+  const collector = interaction.channel.createMessageCollector({
+    filter,
+    time: 15000,
+    max: 1
+  });
+
+  collector.on("collect", msg => {
+    let bet = parseInt(msg.content);
+    let cash = money.get(userId) || 0;
+
+    if (isNaN(bet) || bet <= 0) {
+      return msg.reply("❌ Số xu như vậy cũng nhập được à?");
+    }
+
+    if (bet > cash) {
+      return msg.reply("❌ Qúa nghèo không đủ xu để chơi");
+    }
+
+    // trừ tiền ngay
+    money.set(userId, cash - bet);
+
+    game.players.set(userId, {
+      userId,
+      choice,
+      bet
+    });
+
+    msg.reply(`✅ Đã cược ${formatMoney(bet)} xu với ${choice}`);
+  });
+
+  // 🎟️ VÉ SỐ
+if (interaction.isButton()) {
+  if (!interaction.customId.startsWith("lottery_")) return;
+
+  let data = interaction.customId.split("_");
+  let action = data[1];
+  let ownerId = data[2];
+
+  if (interaction.user.id !== ownerId) {
+    return interaction.reply({
+      content: "Không phải vé của mày 🙂",
+      ephemeral: true
+    });
+  }
+
+  // ❌ HỦY
+  if (action === "no") {
+    return interaction.update({
+      content: "❌ Đã hủy mua vé số",
+      embeds: [],
+      components: []
+    });
+  }
+
+  // ✅ MUA
+  if (action === "yes") {
+    let cash = money.get(ownerId) || 0;
+
+    if (cash < 10000) {
+      return interaction.update({
+        content: "❌ Không đủ xu, nghèo thì đừng đú vé số 😏",
+        embeds: [],
+        components: []
+      });
+    }
+
+    // trừ tiền
+    money.set(ownerId, cash - 10000);
+
+    // set cooldown 30 phút
+    lotteryCooldown.set(ownerId, Date.now() + 30 * 60 * 1000);
+
+    // 🎲 random tỉ lệ trúng
+    let chance = Math.random(); // 0 → 1
+    let winRate = Math.random() * 0.02 + 0.01; // 1% → 3%
+
+    let resultText = "";
+    let color = "#ff4444";
+
+    if (chance <= winRate) {
+      // 🎉 TRÚNG
+      let reward = Math.floor(Math.random() * (30000000000000 - 10000000000000 + 1)) + 10000000000000;
+
+      let newCash = (money.get(ownerId) || 0) + reward;
+      money.set(ownerId, newCash);
+
+      resultText =
+        `🎉 TRÚNG SỐ!!!\n\n` +
+        `💰 Bạn nhận được: **${formatMoney(reward)} xu**\n` +
+        `🏦 Tổng tiền: **${formatMoney(newCash)} xu**`;
+
+      color = "#00ff99";
+    } else {
+      resultText = "💀 Xịt rồi\n10k bay màu như cách crush seen tin nhắn";
+    }
+
+    saveData();
+
+    const resultEmbed = new EmbedBuilder()
+      .setColor(color)
+      .setTitle("🎟️ KẾT QUẢ VÉ SỐ")
+      .setDescription(resultText);
+
+    return interaction.update({
+      embeds: [resultEmbed],
+      components: []
+    });
+  }
+}
+}
 });
 
 // NGÂN HÀNG
@@ -198,6 +329,12 @@ const banks = {
     aliases: ["vietcombank", "vietcom bank", "vcb", "vietcom"],
     interest: 0.05,
     duration: 2 * 24 * 60 * 60 * 1000
+  },
+  "dkbank": {
+    name: "DK Bank",
+    aliases: ["dkbank", "dk bank", "dk"],
+    interest: 0.1,
+    duration: 4 * 24 * 60 * 60 * 1000
   }
 };
 
@@ -235,7 +372,7 @@ function updateBank(userId) {
   }
 }
 
-client.once("ready", () => {
+client.once("clientReady", () => {
     console.log(`🤖 Bot đã online với tên ${client.user.tag}`);
 });
 
@@ -271,9 +408,13 @@ client.on("messageCreate", async (message) => {
           "🔹 `wew checknh`: kiểm tra số dư các ngân hàng\n" +
           "🔹 `wew vayxu @user <số xu>`: yêu cầu vay xu từ người khác\n" +
           "🔹 `wew trano @user`: trả nợ cho người vay\n" +
+          "🔹 `wew checkno`: kiểm tra các khoản nợ của bạn\n" +
           "🔹 `wew nhapcode <tên code>`: nhập code để nhận xu\n" +
           "🔹 `wew topxu`: xem bảng xếp hạng đại gia trong server\n" +
-          "🔹 `wew baucua <lựa chọn> <số xu>`: chơi bầu cua tôm cá (lựa chọn: bau, cua, tom, ca, ga, nai)",
+          "🔹 `wew adminlist`: xem danh sách admin/owner\n" +
+          "🔹 `wew muaveso`: mua vé số\n" +
+          "🔹 `wew baucua <lựa chọn> <số xu>`: chơi bầu cua tôm cá (lựa chọn: bau, cua, tom, ca, ga, nai)" +
+          "🔹 `wew keobuabao`: chơi kéo búa bao với mọi người trong channel",
       })
       .addFields({
         name: "👑 ADMIN/OWNER",
@@ -350,58 +491,41 @@ client.on("messageCreate", async (message) => {
 
 // Lệnh Top xu
 if (cmd === "topxu") {
-  let guild = message.guild;
-
-  if (!guild) return;
-
-  // lấy member trong server
-  let members = await guild.members.fetch();
-
   let list = [];
 
-  members.forEach(member => {
-    if (member.user.bot) return;
-
-    let cash = money.get(member.id) || 10000;
-
+  // lấy toàn bộ user từ money map (tức toàn bot)
+  for (const [id, cash] of money.entries()) {
     list.push({
-      id: member.id,
-      name: member.user.username,
-      cash: cash
+      id: id,
+      cash: cash || 0
     });
-  });
+  }
 
   // sort giảm dần
   list.sort((a, b) => b.cash - a.cash);
 
+  // lấy top 10
+  let top = list.slice(0, 10);
+
   let result = "";
-  let rank = 0;
-  let lastCash = null;
-  let displayCount = 0;
 
-  for (let i = 0; i < list.length; i++) {
-    let user = list[i];
-
-    // nếu tiền khác thì tăng rank
-    if (user.cash !== lastCash) {
-      rank = rank + 1;
+  for (let i = 0; i < top.length; i++) {
+    let user;
+    try {
+      user = await client.users.fetch(top[i].id);
+    } catch {
+      user = { username: "Unknown" };
     }
 
-    // chỉ lấy top 10
-    if (rank > 10) break;
-
-    result += `🏅 Top ${rank}: ${user.name}: **${formatMoney(user.cash)} xu**\n`;
-
-    lastCash = user.cash;
-    displayCount++;
+    result += `🏅 Top ${i + 1}: ${user.username} — **${formatMoney(top[i].cash)} xu**\n`;
   }
 
   const embed = new EmbedBuilder()
     .setColor("#00e1ff")
-    .setTitle("🏆 Bảng Top đại gia nhiều xu nhất:")
-    .setDescription(result || "Không có dữ liệu");
+    .setTitle("🏆 Top Xu Toàn Bộ Server")
+    .setDescription(result || "Không có dữ liệu 🤡");
 
-  message.reply({ embeds: [embed] });
+  return message.reply({ embeds: [embed] });
 }
 
 // LỆNH ADD CODE
@@ -442,6 +566,33 @@ if (cmd === "addcode") {
   message.reply({ embeds: [embed] });
 }
 
+// LỆNH XÓA CODE
+if (cmd === "recode") {
+  if (!allowedIDs.includes(userId)) {
+    return message.reply("❌ Không có quyền, đừng có mơ 😏");
+  }
+
+  let code = args[0];
+
+  if (!code) return message.reply("⚠️ Nhập tên code cần xóa đi má!");
+  
+  if (!codes.has(code)) {
+    return message.reply("❌ Code này không tồn tại!");
+  }
+
+  // XÓA CODE
+  codes.delete(code);
+
+  saveData();
+
+  const embed = new EmbedBuilder()
+    .setColor("#ff0000")
+    .setTitle("🗑️ Đã xóa code")
+    .setDescription(`Code **${code}** đã bay màu khỏi hệ thống!`);
+
+  return message.reply({ embeds: [embed] });
+}
+
 // LỆNH NHẬP CODE
 if (cmd === "nhapcode") {
   let code = args[0];
@@ -476,6 +627,127 @@ if (cmd === "nhapcode") {
   saveData();
 
   return message.reply(`🎉 Bạn đã nhận được: **${formatMoney(data.reward)} xu**`);
+}
+
+// Lệnh kéo búa bao
+if (cmd === "keobuabao") {
+  if (kbbGames.has(message.channel.id)) {
+    return message.reply("❌ Đang có game rồi, đợi tí đi má 😏");
+  }
+
+  const choices = {
+    keo: { name: "Kéo", icon: "✂️" },
+    bua: { name: "Búa", icon: "🪨" },
+    bao: { name: "Bao", icon: "📄" }
+  };
+
+  const embed = new EmbedBuilder()
+    .setColor("#0099ff")
+    .setTitle("🎮 KÉO - BÚA - BAO")
+    .setDescription(
+      "👉 Bấm nút để tham gia\n" +
+      "💰 Sau khi bấm sẽ nhập số xu cược\n" +
+      "⏱️ 30 giây bắt đầu tính từ lúc tạo\n\n" +
+      "✂️ Kéo > Bao\n🪨 Búa > Kéo\n📄 Bao > Búa"
+    );
+
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId("kbb_keo").setLabel("Kéo ✂️").setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId("kbb_bua").setLabel("Búa 🪨").setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId("kbb_bao").setLabel("Bao 📄").setStyle(ButtonStyle.Primary),
+  );
+
+  let msg = await message.reply({ embeds: [embed], components: [row] });
+
+  kbbGames.set(message.channel.id, {
+    players: new Map(),
+    messageId: msg.id
+  });
+
+  // ⏱️ countdown 30s
+  setTimeout(async () => {
+    let game = kbbGames.get(message.channel.id);
+    if (!game) return;
+
+    let players = Array.from(game.players.values());
+
+    if (players.length < 2) {
+      kbbGames.delete(message.channel.id);
+      return msg.edit({
+        content: "❌ Không đủ người chơi, game hủy",
+        embeds: [],
+        components: []
+      });
+    }
+
+    // logic thắng
+    function beats(a, b) {
+      return (
+        (a === "keo" && b === "bao") ||
+        (a === "bua" && b === "keo") ||
+        (a === "bao" && b === "bua")
+      );
+    }
+
+    let winners = [];
+
+    for (let p of players) {
+      let winCount = 0;
+
+      for (let o of players) {
+        if (p.userId !== o.userId && beats(p.choice, o.choice)) {
+          winCount++;
+        }
+      }
+
+      if (winCount > 0) {
+        winners.push(p);
+      }
+    }
+
+    let total = players.reduce((sum, p) => sum + p.bet, 0);
+
+    if (winners.length === 0) {
+      kbbGames.delete(message.channel.id);
+      return msg.edit({
+        content: "🤝 Hòa hết, không ai ăn",
+        embeds: [],
+        components: []
+      });
+    }
+
+    let reward = Math.floor(total / winners.length);
+
+    let resultText = "";
+
+    for (let p of players) {
+      resultText += `<@${p.userId}>: ${choices[p.choice].icon} (${formatMoney(p.bet)} xu)\n`;
+    }
+
+    for (let w of winners) {
+      let cash = money.get(w.userId) || 0;
+      money.set(w.userId, cash + reward);
+    }
+
+    saveData();
+    kbbGames.delete(message.channel.id);
+
+    const resultEmbed = new EmbedBuilder()
+      .setColor("#00ff99")
+      .setTitle("🏆 Kết quả Kéo Búa Bao")
+      .setDescription(resultText)
+      .addFields({
+        name: "💰 Người thắng",
+        value: winners.map(w => `<@${w.userId}>`).join(", ")
+      })
+      .addFields({
+        name: "🎁 Tiền nhận",
+        value: `${formatMoney(reward)} xu mỗi người`
+      });
+
+    msg.edit({ embeds: [resultEmbed], components: [] });
+
+  }, 30000);
 }
 
 // LỆNH VAY XU
@@ -608,6 +880,71 @@ if (cmd === "checkno") {
     .setFooter({ text: "Trả nợ đi đừng để người ta đòi 😏" });
 
   return message.reply({ embeds: [embed] });
+}
+
+// LỆNH MUA VÉ SỐ
+if (cmd === "muaveso") {
+  let now = Date.now();
+  let cd = lotteryCooldown.get(userId) || 0;
+
+  if (now < cd) {
+    let timeLeft = cd - now;
+    let m = Math.floor(timeLeft / 60000);
+    let s = Math.floor((timeLeft % 60000) / 1000);
+
+    return message.reply(`⏱️ Đợi ${m}m ${s}s rồi mua tiếp, ham quá rồi đấy`);
+  }
+
+  const embed = new EmbedBuilder()
+    .setColor("#ffd700")
+    .setTitle("🎟️ MUA VÉ SỐ")
+    .setDescription(
+      "💰 Giá: **10,000 xu**\n" +
+      "🎯 Tỉ lệ trúng: **1% - 3%**\n" +
+      "🏆 Trúng nhận: **10T - 30T xu**\n\n" +
+      "👉 Bạn có chắc muốn mua không?"
+    );
+
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`lottery_yes_${userId}`)
+      .setLabel("Mua")
+      .setStyle(ButtonStyle.Success),
+    new ButtonBuilder()
+      .setCustomId(`lottery_no_${userId}`)
+      .setLabel("Hủy")
+      .setStyle(ButtonStyle.Danger)
+  );
+
+  return message.reply({ embeds: [embed], components: [row] });
+}
+
+// Lệnh adminlist
+if (cmd === "adminlist") {
+  const { EmbedBuilder } = require("discord.js");
+
+  let adminNames = [];
+
+  for (const id of allowedIDs) {
+    try {
+      const user = await client.users.fetch(id);
+      adminNames.push(`👤 ${user.tag}`);
+    } catch (err) {
+      adminNames.push(`❌ Không tìm thấy user (${id})`);
+    }
+  }
+
+  const embed = new EmbedBuilder()
+    .setTitle("👑 Danh Sách Admin / Owner")
+    .setColor("Gold")
+    .setDescription(
+      adminNames.length > 0
+        ? adminNames.join("\n")
+        : "Bot vô chủ 😭"
+    )
+    .setFooter({ text: `Tổng: ${allowedIDs.length} người` });
+
+  message.channel.send({ embeds: [embed] });
 }
 
 // LỆNH BẦU CUA
