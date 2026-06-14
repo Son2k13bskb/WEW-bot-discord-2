@@ -126,194 +126,176 @@ setInterval(saveData, 30 * 1000);
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isButton()) return;
 
-  const data = interaction.customId.split("_");
+  const id = interaction.customId;
 
-  // ✅ ĐỒNG Ý
-  if (data[0] === "agree") {
-    const targetId = data[1];   // người cho vay
-    const borrowerId = data[2]; // người vay
-    const amount = parseInt(data[3]);
+  // ================= KÉO BÚA BAO =================
+  if (id.startsWith("kbb_")) {
+    let game = kbbGames.get(interaction.channel.id);
+    if (!game) return interaction.reply({ content: "Game không tồn tại", ephemeral: true });
 
-    if (interaction.user.id !== targetId) {
-      return interaction.reply({
-        content: "Bạn không có quyền bấm nút này 🙂",
-        ephemeral: true
-      });
-    }
+    let choice = id.split("_")[1];
+    let userId = interaction.user.id;
 
-    let lenderCash = money.get(targetId) || 10000;
-    let borrowerCash = money.get(borrowerId) || 10000;
-
-    if (amount > lenderCash) {
-      return interaction.reply({
-        content: "❌ Không đủ tiền để cho vay!",
-        ephemeral: true
-      });
-    }
-
-    // chuyển tiền
-    money.set(targetId, lenderCash - amount);
-    money.set(borrowerId, borrowerCash + amount);
-
-  // GHI NỢ
-    let debtKey = `${borrowerId}_${targetId}`;
-    let oldDebt = debts.get(debtKey) || 0;
-   debts.set(debtKey, oldDebt + amount);
-
-    saveData();
-
-    await interaction.update({
-      content: `✅ Đã cho vay **${formatMoney(amount)} xu**`,
-      embeds: [],
-      components: []
-    });
-  }
-
-  // ❌ TỪ CHỐI
-  if (data[0] === "deny") {
-    const targetId = data[1];
-
-    if (interaction.user.id !== targetId) {
-      return interaction.reply({
-        content: "Không phải chuyện của mày 🙂",
-        ephemeral: true
-      });
-    }
-
-    await interaction.update({
-      content: "❌ Đã từ chối cho vay",
-      embeds: [],
-      components: []
-    });
-  }
-
-// NÚT KÉO BÚA BAO
-  if (interaction.isButton()) {
-  if (!interaction.customId.startsWith("kbb_")) return;
-
-  let game = kbbGames.get(interaction.channel.id);
-  if (!game) return;
-
-  let choice = interaction.customId.split("_")[1];
-  let userId = interaction.user.id;
-
-  await interaction.reply({
-    content: "💰 Nhập số xu cược:",
-    ephemeral: true
-  });
-
-  const filter = m => m.author.id === userId;
-
-  const collector = interaction.channel.createMessageCollector({
-    filter,
-    time: 15000,
-    max: 1
-  });
-
-  collector.on("collect", msg => {
-    let bet = parseInt(msg.content);
-    let cash = money.get(userId) || 0;
-
-    if (isNaN(bet) || bet <= 0) {
-      return msg.reply("❌ Số xu như vậy cũng nhập được à?");
-    }
-
-    if (bet > cash) {
-      return msg.reply("❌ Qúa nghèo không đủ xu để chơi");
-    }
-
-    // trừ tiền ngay
-    money.set(userId, cash - bet);
-
-    game.players.set(userId, {
-      userId,
-      choice,
-      bet
-    });
-
-    msg.reply(`✅ Đã cược ${formatMoney(bet)} xu với ${choice}`);
-  });
-
-  // 🎟️ VÉ SỐ
-if (interaction.isButton()) {
-  if (!interaction.customId.startsWith("lottery_")) return;
-
-  let data = interaction.customId.split("_");
-  let action = data[1];
-  let ownerId = data[2];
-
-  if (interaction.user.id !== ownerId) {
-    return interaction.reply({
-      content: "Không phải vé của mày 🙂",
+    await interaction.reply({
+      content: "💰 Nhập số xu cược:",
       ephemeral: true
     });
-  }
 
-  // ❌ HỦY
-  if (action === "no") {
-    return interaction.update({
-      content: "❌ Đã hủy mua vé số",
-      embeds: [],
-      components: []
+    const filter = m => m.author.id === userId;
+
+    const collector = interaction.channel.createMessageCollector({
+      filter,
+      time: 15000,
+      max: 1
     });
+
+    collector.on("collect", msg => {
+      let bet = parseInt(msg.content);
+      let cash = money.get(userId) || 0;
+
+      if (isNaN(bet) || bet <= 0) {
+        return msg.reply("❌ Nhập số cho đàng hoàng");
+      }
+
+      if (bet > cash) {
+        return msg.reply("❌ Không đủ xu");
+      }
+
+      money.set(userId, cash - bet);
+
+      game.players.set(userId, {
+        userId,
+        choice,
+        bet
+      });
+
+      // ❌ KHÔNG ĐƯỢC LỘ CHOICE
+      msg.reply(`✅ Đã đặt cược ${formatMoney(bet)} xu`);
+    });
+
+    return;
   }
 
-  // ✅ MUA
-  if (action === "yes") {
-    let cash = money.get(ownerId) || 0;
+  // ================= VÉ SỐ =================
+  if (id.startsWith("lottery_")) {
+    let data = id.split("_");
+    let action = data[1];
+    let ownerId = data[2];
 
-    if (cash < 10000) {
+    if (interaction.user.id !== ownerId) {
+      return interaction.reply({
+        content: "Không phải của mày 🙂",
+        ephemeral: true
+      });
+    }
+
+    // ❌ HỦY
+    if (action === "no") {
       return interaction.update({
-        content: "❌ Không đủ xu, nghèo thì đừng đú vé số 😏",
+        content: "❌ Đã hủy mua vé số",
         embeds: [],
         components: []
       });
     }
 
-    // trừ tiền
-    money.set(ownerId, cash - 10000);
+    // ✅ MUA
+    if (action === "yes") {
+      let cash = money.get(ownerId) || 0;
 
-    // set cooldown 30 phút
-    lotteryCooldown.set(ownerId, Date.now() + 30 * 60 * 1000);
+      if (cash < 10000) {
+        return interaction.update({
+          content: "❌ Không đủ tiền",
+          embeds: [],
+          components: []
+        });
+      }
 
-    // 🎲 random tỉ lệ trúng
-    let chance = Math.random(); // 0 → 1
-    let winRate = Math.random() * 0.02 + 0.01; // 1% → 3%
+      money.set(ownerId, cash - 10000);
+      lotteryCooldown.set(ownerId, Date.now() + 30 * 60 * 1000);
 
-    let resultText = "";
-    let color = "#ff4444";
+      let chance = Math.random();
+      let winRate = Math.random() * 0.02 + 0.01;
 
-    if (chance <= winRate) {
-      // 🎉 TRÚNG
-      let reward = Math.floor(Math.random() * (30000000000000 - 10000000000000 + 1)) + 10000000000000;
+      let resultText = "";
+      let color = "#ff4444";
 
-      let newCash = (money.get(ownerId) || 0) + reward;
-      money.set(ownerId, newCash);
+      if (chance <= winRate) {
+        let reward = Math.floor(Math.random() * (30000000000000 - 10000000000000)) + 10000000000000;
 
-      resultText =
-        `🎉 TRÚNG SỐ!!!\n\n` +
-        `💰 Bạn nhận được: **${formatMoney(reward)} xu**\n` +
-        `🏦 Tổng tiền: **${formatMoney(newCash)} xu**`;
+        let newCash = (money.get(ownerId) || 0) + reward;
+        money.set(ownerId, newCash);
 
-      color = "#00ff99";
-    } else {
-      resultText = "💀 Xịt rồi\n10k bay màu như cách crush seen tin nhắn";
+        resultText =
+          `🎉 TRÚNG!!!\n💰 +${formatMoney(reward)} xu\n🏦 Tổng: ${formatMoney(newCash)}`;
+
+        color = "#00ff99";
+      } else {
+        resultText = "💀 Xịt rồi";
+      }
+
+      saveData();
+
+      const embed = new EmbedBuilder()
+        .setColor(color)
+        .setTitle("🎟️ Kết quả vé số")
+        .setDescription(resultText);
+
+      return interaction.update({
+        embeds: [embed],
+        components: []
+      });
+    }
+  }
+
+  // ================= VAY XU =================
+  if (id.startsWith("agree_") || id.startsWith("deny_")) {
+    const data = id.split("_");
+
+    if (data[0] === "agree") {
+      const targetId = data[1];
+      const borrowerId = data[2];
+      const amount = parseInt(data[3]);
+
+      if (interaction.user.id !== targetId) {
+        return interaction.reply({ content: "Không phải của mày 🙂", ephemeral: true });
+      }
+
+      let lenderCash = money.get(targetId) || 10000;
+      let borrowerCash = money.get(borrowerId) || 10000;
+
+      if (amount > lenderCash) {
+        return interaction.reply({ content: "❌ Không đủ tiền", ephemeral: true });
+      }
+
+      money.set(targetId, lenderCash - amount);
+      money.set(borrowerId, borrowerCash + amount);
+
+      let debtKey = `${borrowerId}_${targetId}`;
+      debts.set(debtKey, (debts.get(debtKey) || 0) + amount);
+
+      saveData();
+
+      return interaction.update({
+        content: `✅ Đã cho vay ${formatMoney(amount)} xu`,
+        embeds: [],
+        components: []
+      });
     }
 
-    saveData();
+    if (data[0] === "deny") {
+      const targetId = data[1];
 
-    const resultEmbed = new EmbedBuilder()
-      .setColor(color)
-      .setTitle("🎟️ KẾT QUẢ VÉ SỐ")
-      .setDescription(resultText);
+      if (interaction.user.id !== targetId) {
+        return interaction.reply({ content: "Không phải của mày 🙂", ephemeral: true });
+      }
 
-    return interaction.update({
-      embeds: [resultEmbed],
-      components: []
-    });
+      return interaction.update({
+        content: "❌ Đã từ chối",
+        embeds: [],
+        components: []
+      });
+    }
   }
-}
-}
 });
 
 // NGÂN HÀNG
