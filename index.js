@@ -657,8 +657,8 @@ client.on("messageCreate", async (message) => {
           "🔹 `wew topxu`: xem bảng xếp hạng đại gia trong server\n" +
           "🔹 `wew adminlist`: xem danh sách admin/owner\n" +
           "🔹 `wew muaveso`: mua vé số\n" +
-          "🔹 `wew keobuabao`: chơi kéo búa bao với mọi người trong channel" +
           "🔹 `wew quaymayman`: quay vòng quay may mắn\n" +
+          "🔹 `wew keobuabao`: chơi kéo búa bao với mọi người trong channel" +
           "🔹 `wew baucua <lựa chọn> <số xu>`: chơi bầu cua tôm cá (lựa chọn: bau, cua, tom, ca, ga, nai)",
       })
       .addFields({
@@ -672,6 +672,8 @@ client.on("messageCreate", async (message) => {
           "🔹 `wew recode <tên code>`: xóa code\n" +
           "🔹 `/setlogschannel <channel>`: set channel log\n" +
           "🔹 `wew logs`: xem log\n" +
+          "🔹 `wew mayman @user <phần trăm may mắn>`: tăng số may mắn lên \n" +
+          "🔹 `wew unmayman @user`: reset số phần trăm may mắn\n" +
           "🔹 `wew addcode <tên code> <số xu> <số lần có thể nhạp>`: thêm code mới\n",
       })
       .setFooter({ text: "WEW BOT ● MADE BY CAUBEVOTRI" });
