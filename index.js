@@ -637,6 +637,8 @@ client.on("messageCreate", async (message) => {
           "🔹 `wew addadmin <id>`: thêm admin\n" +
           "🔹 `wew unadmin <id>`: xóa admin\n" +
           "🔹 `wew recode <tên code>`: xóa code\n" +
+          "🔹 `wew setlogschannel <channel>`: set channel log\n" +
+          "🔹 `wew logs`: xem log\n" +
           "🔹 `wew addcode <tên code> <số xu> <số lần có thể nhạp>`: thêm code mới\n",
       })
       .setFooter({ text: "WEW BOT ● MADE BY CAUBEVOTRI" });
