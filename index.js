@@ -76,59 +76,49 @@ function loadData() {
     const rawData = fs.readFileSync(dataFile, 'utf-8');
     try {
       const parsedData = JSON.parse(rawData);
+      
+      // 1. Duyệt nạp dữ liệu của từng User trước
       for (const [userId, data] of Object.entries(parsedData)) {
-  if (data && typeof data.cash === 'number') {
-    money.set(userId, data.cash);
-    streakData.set(userId, data.streak || 0);
-    dailyCooldown.set(userId, data.nextDaily || 0);
-
-  if (parsedData._luck) {
-  for (let id in parsedData._luck) {
-    luckRates.set(id, parsedData._luck[id]);
-    }
-  }
-
-  if (parsedData._logs) {
-  parsedData._logs.forEach(l => logs.push(l));
-  }
-
-  if (parsedData._logsChannel) {
-    logsChannelId = parsedData._logsChannel;
-  }
-
-    if (parsedData._codes) {
-  for (let code in parsedData._codes) {
-    codes.set(code, parsedData._codes[code]);
-  }
-}
-
-
-function getLuck(userId, defaultRate) {
-  if (luckRates.has(userId)) {
-    return luckRates.get(userId) / 100;
-  }
-  return defaultRate;
-}
-
-if (parsedData._usedCodes) {
-  for (let userId in parsedData._usedCodes) {
-    usedCodes.set(userId, parsedData._usedCodes[userId]);
-  }
-}
-
-// LOAD ADMIN
-if (parsedData._admins) {
-  parsedData._admins.forEach(id => admins.add(id));
-}
-
-    // LOAD NỢ
-    if (data.debts) {
-      for (let key in data.debts) {
-      debts.set(key, data.debts[key]);
+        if (data && typeof data.cash === 'number') {
+          money.set(userId, data.cash);
+          streakData.set(userId, data.streak || 0);
+          dailyCooldown.set(userId, data.nextDaily || 0);
+          
+          if (data.debts) {
+            for (let key in data.debts) {
+              debts.set(key, data.debts[key]);
+            }
+          }
+        }
       }
-    }
-  }
+
+      // 2. ĐƯA CÁC ĐOẠN NÀY RA NGOÀI VÒNG LẶP USER (NẰM TRONG TRY)
+      if (parsedData._luck) {
+        for (let id in parsedData._luck) {
+          luckRates.set(id, parsedData._luck[id]);
+        }
       }
+      if (parsedData._logs) {
+        logs.length = 0; // Xóa sạch log cũ trước khi nạp tránh bị trùng lặp
+        parsedData._logs.forEach(l => logs.push(l));
+      }
+      if (parsedData._logsChannel) {
+        logsChannelId = parsedData._logsChannel;
+      }
+      if (parsedData._codes) {
+        for (let code in parsedData._codes) {
+          codes.set(code, parsedData._codes[code]);
+        }
+      }
+      if (parsedData._usedCodes) {
+        for (let userId in parsedData._usedCodes) {
+          usedCodes.set(userId, parsedData._usedCodes[userId]);
+        }
+      }
+      if (parsedData._admins) {
+        parsedData._admins.forEach(id => admins.add(id));
+      }
+
       console.log("✅ Đã tải thành công dữ liệu từ data.json!");
     } catch (err) {
       console.log("❌ Lỗi khi đọc file data.json, kiểm tra lại cú pháp JSON!");
@@ -199,6 +189,14 @@ loadData();
 setInterval(saveData, 30 * 1000);
 // ==========================================
 
+// ĐƯA HÀM NÀY RA BÊN NGOÀI, ĐỨNG ĐỘC LẬP
+function getLuck(userId, defaultRate) {
+  if (luckRates.has(userId)) {
+    return luckRates.get(userId) / 100;
+  }
+  return defaultRate;
+}
+
 function addLog(user, command) {
   const logData = {
     user: user.username,
@@ -222,6 +220,21 @@ function addLog(user, command) {
 }
 
 client.on("interactionCreate", async (interaction) => {
+  // Xử lý Lệnh Slash trước
+  if (interaction.isChatInputCommand()) {
+    if (interaction.commandName === "setlogschannel") {
+      if (!isAdmin(interaction.user.id)) {
+        return interaction.reply({ content: "❌ Không có quyền", ephemeral: true });
+      }
+      const channel = interaction.options.getChannel("channel");
+      logsChannelId = channel.id;
+      saveData();
+      return interaction.reply({ content: `✅ Đã set channel log: ${channel}`, ephemeral: true });
+    }
+    return;
+  }
+
+  // Nếu không phải nút bấm thì không xử lý các logic phía dưới
   if (!interaction.isButton()) return;
 
   const id = interaction.customId;
@@ -369,93 +382,113 @@ if (interaction.isChatInputCommand()) {
     }
   }
 
-  // ================= QUAY MAY MẮN =================
-if (id.startsWith("spin_")) {
-  let userId = id.split("_")[1];
+// ================= QUAY MAY MẮN =================
+  // 1. Đưa logic HỦY QUAY lên trước để không bị "spin_" hốt nhầm
+  if (id.startsWith("spin_cancel_")) {
+    let userId = id.split("_")[2];
 
-  if (interaction.user.id !== userId) {
-    return interaction.reply({
-      content: "Không phải lượt của mày 🙂",
-      ephemeral: true
+    if (interaction.user.id !== userId) {
+      return interaction.reply({
+        content: "Không phải của mày",
+        ephemeral: true
+      });
+    }
+
+    return interaction.update({
+      content: "❌ Đã hủy quay",
+      embeds: [],
+      components: []
     });
   }
 
-  let now = Date.now();
-  let cd = spinCooldown.get(userId) || 0;
+  // 2. Logic QUAY CHÍNH
+  if (id.startsWith("spin_")) {
+    let userId = id.split("_")[1];
 
-  if (now < cd) {
-    let timeLeft = cd - now;
-    let m = Math.floor(timeLeft / 60000);
-    let s = Math.floor((timeLeft % 60000) / 1000);
+    if (interaction.user.id !== userId) {
+      return interaction.reply({
+        content: "Không phải lượt của mày 🙂",
+        ephemeral: true
+      });
+    }
 
-    return interaction.reply({
-      content: `⏱️ Đợi ${m}m ${s}s để quay tiếp`,
-      ephemeral: true
+    let now = Date.now();
+    let cd = spinCooldown.get(userId) || 0;
+
+    if (now < cd) {
+      let timeLeft = cd - now;
+      let m = Math.floor(timeLeft / 60000);
+      let s = Math.floor((timeLeft % 60000) / 1000);
+
+      return interaction.reply({
+        content: `⏱️ Đợi ${m}m ${s}s để quay tiếp`,
+        ephemeral: true
+      });
+    }
+
+    let cash = money.get(userId) || 0;
+
+    if (cash < 100000) {
+      return interaction.reply({
+        content: "❌ Không đủ 100k xu để quay",
+        ephemeral: true
+      });
+    }
+
+    // trừ tiền
+    money.set(userId, cash - 100000);
+    spinCooldown.set(userId, now + 10 * 60 * 1000);
+
+    // 🎲 random theo tỉ lệ
+    let rand = Math.random();
+    let luck = getLuck(userId, rand);
+    rand = luck;
+    let reward = 0;
+    let text = "";
+
+    if (rand <= 0.40) {
+      reward = 50000;
+      text = "50.000 xu";
+    } else if (rand <= 0.60) {
+      reward = 500000;
+      text = "500.000 xu";
+    } else if (rand <= 0.75) {
+      reward = 1000000;
+      text = "1.000.000 xu";
+    } else if (rand <= 0.80) {
+      reward = 150000000;
+      text = "150.000.000 xu";
+    } else if (rand <= 0.81) {
+      reward = 1000000000;
+      text = "1.000.000.000 xu";
+    } else {
+      reward = 0;
+      text = "Tạch, không trúng gì cả";
+    }
+
+    // cộng tiền
+    let newCash = (money.get(userId) || 0) + reward;
+    money.set(userId, newCash);
+
+    const embed = new EmbedBuilder()
+      .setColor(reward > 0 ? "#00ff99" : "#ff4444")
+      .setTitle("🎰 KẾT QUẢ QUAY")
+      .setDescription(
+        reward > 0
+          ? `🎉 Bạn trúng: **${text}**\n💰 Tổng: ${formatMoney(newCash)} xu`
+          : "Hết cứu, mất 100k"
+      );
+
+    // 3. Phản hồi cho người dùng trước bằng interaction.update() 
+    await interaction.update({
+      embeds: [embed],
+      components: []
     });
+
+    // Sau khi phản hồi thành công mới tiến hành lưu data để không bị timeout
+    saveData();
+    return;
   }
-
-  let cash = money.get(userId) || 0;
-
-  if (cash < 100000) {
-    return interaction.reply({
-      content: "❌ Không đủ 100k xu để quay",
-      ephemeral: true
-    });
-  }
-
-  // trừ tiền
-  money.set(userId, cash - 100000);
-
-  // set cooldown 10 phút
-  spinCooldown.set(userId, now + 10 * 60 * 1000);
-
-  // 🎲 random theo tỉ lệ
-  let rand = Math.random();
-  let luck = getLuck(userId, rand);
-  rand = luck;
-  let reward = 0;
-  let text = "";
-
-  if (rand <= 0.40) {
-    reward = 50000;
-    text = "50.000 xu";
-  } else if (rand <= 0.60) {
-    reward = 500000;
-    text = "500.000 xu";
-  } else if (rand <= 0.75) {
-    reward = 1000000;
-    text = "1.000.000 xu";
-  } else if (rand <= 0.80) {
-    reward = 150000000;
-    text = "150.000.000 xu";
-  } else if (rand <= 0.81) {
-    reward = 1000000000;
-    text = "1.000.000.000 xu";
-  } else {
-    reward = 0;
-    text = "Tạch, không trúng gì cả";
-  }
-
-  // cộng tiền
-  let newCash = (money.get(userId) || 0) + reward;
-  money.set(userId, newCash);
-
-  saveData();
-
-  const embed = new EmbedBuilder()
-    .setColor(reward > 0 ? "#00ff99" : "#ff4444")
-    .setTitle("🎰 KẾT QUẢ QUAY")
-    .setDescription(
-      reward > 0
-        ? `🎉 Bạn trúng: **${text}**\n💰 Tổng: ${formatMoney(newCash)} xu`
-        : "Hết cứu, mất 100k"
-    );
-
-  return interaction.update({
-    embeds: [embed],
-    components: []
-  });
-}
 
 // HỦY QUAY
 if (id.startsWith("spin_cancel_")) {
@@ -582,7 +615,7 @@ function updateBank(userId) {
   }
 }
 
-client.once("clientReady", () => {
+client.once("ready", () => {
     console.log(`🤖 Bot đã online với tên ${client.user.tag}`);
 });
 
@@ -637,7 +670,7 @@ client.on("messageCreate", async (message) => {
           "🔹 `wew addadmin <id>`: thêm admin\n" +
           "🔹 `wew unadmin <id>`: xóa admin\n" +
           "🔹 `wew recode <tên code>`: xóa code\n" +
-          "🔹 `wew setlogschannel <channel>`: set channel log\n" +
+          "🔹 `/setlogschannel <channel>`: set channel log\n" +
           "🔹 `wew logs`: xem log\n" +
           "🔹 `wew addcode <tên code> <số xu> <số lần có thể nhạp>`: thêm code mới\n",
       })
