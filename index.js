@@ -304,7 +304,7 @@ client.on("interactionCreate", async (interaction) => {
       });
 
       // ❌ KHÔNG ĐƯỢC LỘ CHOICE
-      msg.reply(`✅ Đã đặt cược ${formatMoney(bet)} VNĐ`);
+      msg.reply(`✅ Đã đặt cược ${formatMoney(bet)}`);
     });
 
     return;
@@ -384,7 +384,7 @@ if (interaction.isChatInputCommand()) {
         money.set(ownerId, newCash);
 
         resultText =
-          `🎉 TRÚNG!!!\n💰 +${formatMoney(reward)} VNĐ\n🏦 Tổng: ${formatMoney(newCash)}`;
+          `🎉 TRÚNG!!!\n💰 +${formatMoney(reward)}\n🏦 Tổng: ${formatMoney(newCash)}`;
 
         color = "#00ff99";
       } else {
@@ -498,7 +498,7 @@ if (interaction.isChatInputCommand()) {
       .setTitle("🎰 KẾT QUẢ QUAY")
       .setDescription(
         reward > 0
-          ? `🎉 Bạn trúng: **${text}**\n💰 Tổng: ${formatMoney(newCash)} VNĐ`
+          ? `🎉 Bạn trúng: **${text}**\n💰 Tổng: ${formatMoney(newCash)}`
           : "Hết cứu, mất 100k"
       );
 
@@ -788,7 +788,7 @@ client.on("messageCreate", async (message) => {
     let s = Math.floor((diffMs % (1000 * 60)) / 1000);
 
     return message.reply(
-      `💰 ${message.author.username} đã nhận phần thưởng là ${formatMoney(reward)} VNĐ 💵\n` +
+      `💰 ${message.author.username} đã nhận phần thưởng là ${formatMoney(reward)} 💵\n` +
       `🔥 chuỗi hôm nay là: ${currentStreak}\n` +
       `⏱️ Cần đợi ${h}H ${m}M ${s}S để nhận phần thưởng tiếp theo`
     );
@@ -822,7 +822,7 @@ if (cmd === "topdaigia") {
       user = { username: "Unknown" };
     }
 
-    result += `🏅 Top ${i + 1}: ${user.username} — **${formatMoney(top[i].cash)} VNĐ**\n`;
+    result += `🏅 Top ${i + 1}: ${user.username} — **${formatMoney(top[i].cash)}**\n`;
   }
 
   const embed = new EmbedBuilder()
@@ -931,7 +931,7 @@ if (cmd === "nhapcode") {
 
   saveData();
 
-  return message.reply(`🎉 Bạn đã nhận được: **${formatMoney(data.reward)} VNĐ**`);
+  return message.reply(`🎉 Bạn đã nhận được: **${formatMoney(data.reward)}**`);
 }
 
 // LỆNH ADD ADMIN
@@ -1072,7 +1072,7 @@ if (cmd === "keobuabao") {
     let resultText = "";
 
     for (let p of players) {
-      resultText += `<@${p.userId}>: ${choices[p.choice].icon} (${formatMoney(p.bet)} VNĐ)\n`;
+      resultText += `<@${p.userId}>: ${choices[p.choice].icon} (${formatMoney(p.bet)})\n`;
     }
 
     for (let w of winners) {
@@ -1093,7 +1093,7 @@ if (cmd === "keobuabao") {
       })
       .addFields({
         name: "🎁 Tiền nhận",
-        value: `${formatMoney(reward)} VNĐ mỗi người`
+        value: `${formatMoney(reward)} mỗi người`
       });
 
     msg.edit({ embeds: [resultEmbed], components: [] });
@@ -1174,7 +1174,7 @@ if (cmd === "trano") {
     saveData();
 
     return message.reply(
-      `💸 Đã trả hết **${formatMoney(debt)} VNĐ** cho ${target}`
+      `💸 Đã trả hết **${formatMoney(debt)}** cho ${target}`
     );
   }
 
@@ -1189,7 +1189,7 @@ if (cmd === "trano") {
   saveData();
 
   return message.reply(
-    `⚠️ Đã trả **${formatMoney(paid)} VNĐ**\nCòn nợ: **${formatMoney(remaining)} VNĐ**`
+    `⚠️ Đã trả **${formatMoney(paid)}**\nCòn nợ: **${formatMoney(remaining)}**`
   );
 }
 
@@ -1221,7 +1221,7 @@ if (cmd === "checkno") {
   let desc = "";
 
   list.forEach((item, index) => {
-    desc += `💸 ${index + 1}. <@${item.lenderId}>: **${formatMoney(item.amount)} VNĐ**\n`;
+    desc += `💸 ${index + 1}. <@${item.lenderId}>: **${formatMoney(item.amount)}**\n`;
   });
 
   const embed = new EmbedBuilder()
@@ -1413,12 +1413,12 @@ if (cmd === "baucua") {
         name: count > 0 ? "💰 Kết quả" : "💸 Kết quả",
         value:
           count > 0
-            ? `Trúng **${count} lần**\n+${formatMoney(win)} VNĐ`
-            : `Thua sạch\n-${formatMoney(bet)} VNĐ`
+            ? `Trúng **${count} lần**\n+${formatMoney(win)}`
+            : `Thua sạch\n-${formatMoney(bet)}`
       },
       {
         name: "🏦 Số dư",
-        value: `${formatMoney(userMoney)} VNĐ`
+        value: `${formatMoney(userMoney)}`
       }
     )
     .setFooter({ text: "Chơi vui thôi, đừng all-in rồi khóc 😏" });
@@ -1657,11 +1657,11 @@ if (cmd === "baucua") {
     if (win) {
       money.set(userId, cash + bet);
       saveData(); 
-      return msg.edit(`🎉 Chúc mừng thắng lớn, đã nhận về **${formatMoney(bet * 2)} VNĐ**!`);
+      return msg.edit(`🎉 Chúc mừng thắng lớn, đã nhận về **${formatMoney(bet * 2)}**!`);
     } else {
       money.set(userId, cash - bet);
       saveData(); 
-      return msg.edit(`❌ Đã cược **${formatMoney(bet)} VNĐ** và mất tất cả`);
+      return msg.edit(`❌ Đã cược **${formatMoney(bet)}** và mất tất cả`);
     }
   }
 
@@ -1725,7 +1725,7 @@ if (cmd === "unmayman") {
     if (isNaN(amount) || amount <= 0) return message.reply("Số tiền không hợp lệ!");
 
     if (amount > cash) {
-      return message.reply(`Số tiền của bạn không đủ! Bạn có **${formatMoney(cash)} VNĐ**`);
+      return message.reply(`Số tiền của bạn không đủ! Bạn có **${formatMoney(cash)}**`);
     }
 
     if (!money.has(target.id)) {
