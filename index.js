@@ -484,19 +484,25 @@ function updateBank(userId) {
 client.once("ready", async () => {
     console.log(`🤖 Bot đã online với tên ${client.user.tag}`);
     
-    // Tự động kéo kho dữ liệu Từ điển Tiếng Việt từ Github winstonleedev
+    // Tự động kéo kho dữ liệu Từ điển Tiếng Việt lớn nhất (74K từ) từ Github
     try {
-      const res = await fetch("https://raw.githubusercontent.com/winstonleedev/tudien/master/tudien.txt");
+      // Thay link ở dòng fetch này:
+      const res = await fetch("https://raw.githubusercontent.com/duyet/vietnamese-wordlist/master/Viet74K.txt");
+      
       if (res.ok) {
         const text = await res.text();
-        // Tách dòng, loại bỏ khoảng trắng dư, chuyển in thường, chuẩn hóa bộ gõ NFC
         const rawWords = text.split("\n")
           .map(w => w.trim().toLowerCase().normalize("NFC"))
-          .filter(w => w && w.length > 1 && !w.startsWith("#"));
+          .filter(w => {
+            if (!w || w.length < 2 || w.startsWith("#")) return false;
+            // BỘ LỌC THẦN THÁNH: Chỉ lấy từ có ĐÚNG 2 âm tiết
+            const parts = w.split(" ");
+            return parts.length === 2; 
+          });
           
         if (rawWords.length > 0) {
           wordDictionary = Array.from(new Set([...wordDictionary, ...rawWords]));
-          console.log(`📚 Đã nạp thành công từ điển nối từ gồm ${wordDictionary.length} từ!`);
+          console.log(`📚 Đã nạp thành công bộ 74K từ: Lọc xong CÒN LẠI ${wordDictionary.length} TỪ chuẩn để nối!`);
         }
       }
     } catch (e) {
@@ -512,11 +518,24 @@ client.on("messageCreate", async (message) => {
     const rawInput = message.content.trim();
     const lowerInput = rawInput.toLowerCase().normalize("NFC");
 
-    if (lowerInput === `${PREFIX} stop`.toLowerCase() || lowerInput === "wew stop") {
-      // Cho đi tiếp xuống xử lý lệnh stop ở phía dưới
+    // Cho phép cả lệnh stop và lệnh chiu đi qua bộ lọc nối từ
+    if (
+      lowerInput === `${PREFIX} stop`.toLowerCase() || lowerInput === "wew stop" ||
+      lowerInput === `${PREFIX} chiu`.toLowerCase() || lowerInput === "wew chiu"
+    ) {
+      // Cho đi tiếp xuống xử lý lệnh hành động ở phía dưới
     } else if (!message.content.toLowerCase().startsWith(PREFIX.toLowerCase())) {
       
-      // 1. Kiểm tra từ có nghĩa trong từ điển không
+      const userWords = lowerInput.split(" ");
+      
+      // 1. CHẶN TRƯỚC: Bắt buộc người chơi phải nhập đúng từ 2 tiếng
+      if (userWords.length !== 2) {
+        return message.reply("❌ Game nối từ chỉ chấp nhận từ ghép có đúng 2 tiếng thôi nha!")
+          .then(msg => setTimeout(() => msg.delete().catch(() => {}), 4000))
+          .catch(() => {});
+      }
+
+      // 2. Kiểm tra từ có nghĩa trong từ điển không
       if (!wordDictionary.includes(lowerInput)) {
         await message.react('❌').catch(() => {});
         return message.reply("❌ Từ này không có trong từ điển tiếng Việt!")
@@ -524,34 +543,33 @@ client.on("messageCreate", async (message) => {
           .catch(() => {});
       }
 
-      // 2. Kiểm tra quy tắc nối ký tự đầu - cuối
+      // 3. Kiểm tra quy tắc nối ký tự đầu - cuối
       const botCurrentWords = wordGameState.currentWord.split(" ");
       const lastBotSyllable = botCurrentWords[botCurrentWords.length - 1];
-      const userWords = lowerInput.split(" ");
       const firstUserSyllable = userWords[0];
 
       if (firstUserSyllable !== lastBotSyllable) {
         return message.reply(`⚠️ Đang nối với từ : **${wordGameState.currentWord}**`);
       }
 
-      // 3. Đúng luật: Tích ✅, cộng tiền âm thầm (50 - 100 VNĐ)
+      // 4. Đúng luật: Tích ✅, cộng tiền âm thầm (50 - 100 VNĐ)
       await message.react('✅').catch(() => {});
-      wordGameState.lastUserId = message.author.id; // Vẫn lưu lại để tracking nếu cần
+      wordGameState.lastUserId = message.author.id;
 
       const silentReward = Math.floor(Math.random() * (100 - 50 + 1)) + 50;
       money.set(message.author.id, (money.get(message.author.id) || 10000) + silentReward);
       saveData();
 
-      // 4. Bot tự tìm từ nối tiếp từ của người dùng
+      // 5. Bot tự tìm từ nối tiếp từ của người dùng
       const lastUserSyllable = userWords[userWords.length - 1];
       const validBotChoices = wordDictionary.filter(w => {
         const parts = w.split(" ");
         return parts[0] === lastUserSyllable && w !== lowerInput;
       });
 
-      // Nếu Bot cạn từ -> Bot thua, User thắng lớn (2k - 5k VNĐ âm thầm)
+      // Nếu Bot cạn từ -> Bot thua, Người nối cuối thắng lớn (5k - 10k xu)
       if (validBotChoices.length === 0) {
-        const jackpotReward = Math.floor(Math.random() * (5000 - 2000 + 1)) + 2000;
+        const jackpotReward = Math.floor(Math.random() * (10000 - 5000 + 1)) + 5000; // Đã sửa: 5,000 - 10,000 xu
         money.set(message.author.id, (money.get(message.author.id) || 10000) + jackpotReward);
         saveData();
 
@@ -559,7 +577,7 @@ client.on("messageCreate", async (message) => {
         wordGameState.currentWord = "";
         wordGameState.lastUserId = "";
 
-        return message.reply(`🎉 Kinh quá! Từ điển chịu thua rồi, không còn từ nào bắt đầu bằng từ **${lastUserSyllable}** nữa!\n🏆 Bạn đã thắng Bot và được cộng âm thầm **${formatMoney(jackpotReward)}**!`);
+        return message.reply(`🎉 Kinh quá! không còn từ nào bắt đầu bằng từ **${lastUserSyllable}** nữa!\n🏆 Bạn đã bại Bot và nhận được phần thưởng **${formatMoney(jackpotReward)}**!`);
       }
 
       const botNextWord = validBotChoices[Math.floor(Math.random() * validBotChoices.length)];
@@ -602,24 +620,24 @@ client.on("messageCreate", async (message) => {
     return message.reply(`🎮 **Trò chơi Nối Từ Tiếng Việt đã bắt đầu!**\n🤖 Bot ra từ đầu tiên: **${starterWord}**\n👉 Bất kì ai cũng có thể tham gia nối chung (Người dùng nối 1 từ ➜ Bot nối 1 từ)!`);
   }
 
-  // ================= LỆNH DỪNG CHƠI NỐI TỪ =================
-  if (cmd === "stop") {
-    // Nếu chưa thiết lập kênh nối từ, bot thông báo lỗi ngay lập tức
+// ================= LỆNH DỪNG CHƠI / CHỊU THUA =================
+  if (cmd === "stop" || cmd === "chiu") {
     if (!wordGameChannelId) {
       return message.reply("❌ Chưa set channel nối từ!");
     }
     if (message.channel.id !== wordGameChannelId) {
-      return message.reply("❌ Lệnh dừng chơi phải được thực hiện tại kênh game đã cài đặt!");
+      return message.reply("❌ Lệnh này phải được thực hiện tại kênh game đã cài đặt!");
     }
     if (!wordGameState.isPlaying) {
-      return message.reply("❌ Hiện tại không có trận đấu nối từ nào đang diễn ra để dừng!");
+      return message.reply("❌ Hiện tại không có trận đấu nối từ nào đang diễn ra!");
     }
 
+    // Reset trạng thái game
     wordGameState.isPlaying = false;
     wordGameState.currentWord = "";
     wordGameState.lastUserId = "";
 
-    return message.reply("🛑 **Đã dừng trò chơi nối từ thành công!**");
+    return message.reply(`👑 **BOT ĐÃ GIÀNH CHIẾN THẮNG TRUYỆT ĐỐI!**\nTất cả người chơi đều thất bại và không có bất kỳ phần thưởng nào được trao!`);
   }
 
   // MENU
@@ -649,6 +667,7 @@ client.on("messageCreate", async (message) => {
           "🔹 `wew keobuabao`: chơi kéo búa bao với mọi người trong channel\n" +
           "🔹 `wew start`: Bắt đầu chơi game nối từ (người vs bot)\n" +
           "🔹 `wew stop`: Dừng chơi game nối từ hiện tại\n" +
+          "🔹 `wew chiu`: đầu hàng game nối từ\n" +
           "🔹 `wew baucua <lựa chọn> <số tiền>`: chơi bầu cua (bau, cua, tom, ca, ga, nai)",
       })
       .addFields({
