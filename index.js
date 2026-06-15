@@ -560,7 +560,7 @@ if (id.startsWith("spin_cancel_")) {
       saveData();
 
       return interaction.update({
-        content: `✅ Đã cho vay ${formatMoney(amount)} VNĐ`,
+        content: `✅ Đã cho vay ${formatMoney(amount)}`,
         embeds: [],
         components: []
       });
@@ -1113,7 +1113,7 @@ if (cmd === "vaytien") {
   let targetCash = money.get(target.id) || 10000;
 
   if (amount > targetCash) {
-    return message.reply(`❌ Người này không đủ tiền! Hiện có: **${formatMoney(targetCash)} VNĐ**`);
+    return message.reply(`❌ Người này không đủ tiền! Hiện có: **${formatMoney(targetCash)}**`);
   }
 
   const embed = new EmbedBuilder()
@@ -1121,7 +1121,7 @@ if (cmd === "vaytien") {
     .setTitle("📩 Yêu cầu vay tiền")
     .setDescription(
       `👤 Người vay: ${message.author}\n` +
-      `💰 Số tiền: **${formatMoney(amount)} VNĐ**\n\n` +
+      `💰 Số tiền: **${formatMoney(amount)}**\n\n` +
       `👉 ${target} hãy bấm nút bên dưới để quyết định`
     );
 
@@ -1445,7 +1445,7 @@ if (cmd === "baucua") {
         }
       }
       desc += `💵 ${bank.name}\n`;
-      desc += `**${formatMoney(amount)} VNĐ** (Lãi ${(bank.interest * 100).toFixed(0)}%/${bank.duration / 86400000} ngày)\n\n`;
+      desc += `**${formatMoney(amount)}** (Lãi ${(bank.interest * 100).toFixed(0)}%/${bank.duration / 86400000} ngày)\n\n`;
     }
 
     embed.setDescription(desc);
@@ -1457,7 +1457,7 @@ if (cmd === "baucua") {
   // XEM TIỀN
   if (cmd === "tien") {
     let cash = money.get(userId);
-    message.reply(`💰 Số tiền trong ví của bạn là: **${formatMoney(cash)} VNĐ**`);
+    message.reply(`💰 Số tiền trong ví của bạn là: **${formatMoney(cash)}**`);
   }
 
 // GỬI NGÂN HÀNG
@@ -1503,7 +1503,7 @@ if (cmd === "baucua") {
     saveData(); 
 
     message.reply(
-      `**ĐÃ GỬI THÀNH CÔNG:** Bạn đã gửi **${formatMoney(amount)} VNĐ** vào ngân hàng **${bank.name}**`
+      `**ĐÃ GỬI THÀNH CÔNG:** Bạn đã gửi **${formatMoney(amount)}** vào ngân hàng **${bank.name}**`
     );
   }
 
@@ -1539,7 +1539,7 @@ if (cmd === "baucua") {
     money.set(userId, money.get(userId) + amount);
     saveData(); 
 
-    message.reply(`**ĐÃ RÚT THÀNH CÔNG:** Bạn đã rút **${formatMoney(amount)} VNĐ** khỏi ngân hàng **${banks[bankKey].name}**`);
+    message.reply(`**ĐÃ RÚT THÀNH CÔNG:** Bạn đã rút **${formatMoney(amount)}** khỏi ngân hàng **${banks[bankKey].name}**`);
   }
 
   // ADD TIEN
@@ -1556,7 +1556,7 @@ if (cmd === "baucua") {
     money.set(target.id, money.get(target.id) + amount);
     saveData(); 
 
-    message.reply(`Đã thêm **${formatMoney(amount)} VNĐ** cho ${target}`);
+    message.reply(`Đã thêm **${formatMoney(amount)}** cho ${target}`);
   }
 
 // THU TIEN
@@ -1579,7 +1579,7 @@ if (cmd === "baucua") {
     money.set(target.id, current - amount);
     saveData(); 
 
-    message.reply(`Đã thu **${formatMoney(amount)} VNĐ** từ ${target}`);
+    message.reply(`Đã thu **${formatMoney(amount)}** từ ${target}`);
   }
   
   // CHECK TIỀN NGƯỜI KHÁC
@@ -1599,7 +1599,7 @@ if (cmd === "baucua") {
       targetCash = 10000;
     }
 
-    message.reply(`🔍 Số tiền hiện tại của **${target.username}** là: **${formatMoney(targetCash)} VNĐ**`);
+    message.reply(`🔍 Số tiền hiện tại của **${target.username}** là: **${formatMoney(targetCash)}**`);
   }
 
   // CƯỢC
@@ -1736,7 +1736,7 @@ if (cmd === "unmayman") {
     money.set(target.id, money.get(target.id) + amount);
     saveData(); 
 
-    message.reply(`Bạn đã chuyển **${formatMoney(amount)} VNĐ** cho ${target}`);
+    message.reply(`Bạn đã chuyển **${formatMoney(amount)}** cho ${target}`);
   }
 
 });
