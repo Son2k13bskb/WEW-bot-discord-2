@@ -1,3 +1,7 @@
+const logs = [];
+let logsChannelId = null;
+const luckRates = new Map();
+const spinCooldown = new Map();
 const lotteryCooldown = new Map();
 const kbbGames = new Map();
 const codes = new Map(); 
@@ -38,6 +42,34 @@ const bankData = new Map();
 const streakData = new Map();
 const dailyCooldown = new Map();
 
+const { REST, Routes, SlashCommandBuilder } = require("discord.js");
+
+const slashCommands = [
+  new SlashCommandBuilder()
+    .setName("setlogschannel")
+    .setDescription("Set channel log cho bot")
+    .addChannelOption(option =>
+      option.setName("channel")
+        .setDescription("Chọn channel log")
+        .setRequired(true)
+    )
+    .toJSON()
+];
+
+const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
+
+(async () => {
+  try {
+    await rest.put(
+      Routes.applicationCommands("process.env.CLIENT"),
+      { body: slashCommands }
+    );
+    console.log("✅ Đã đăng ký slash command");
+  } catch (err) {
+    console.error(err);
+  }
+})();
+
 // Hàm Tải Dữ Liệu từ data.json khi khởi động bot
 function loadData() {
   if (fs.existsSync(dataFile)) {
@@ -50,10 +82,54 @@ function loadData() {
     streakData.set(userId, data.streak || 0);
     dailyCooldown.set(userId, data.nextDaily || 0);
 
+  if (parsedData._luck) {
+  for (let id in parsedData._luck) {
+    luckRates.set(id, parsedData._luck[id]);
+    }
+  }
+
+  if (parsedData._logs) {
+  parsedData._logs.forEach(l => logs.push(l));
+  }
+
+  if (parsedData._logsChannel) {
+    logsChannelId = parsedData._logsChannel;
+  }
+
     if (parsedData._codes) {
   for (let code in parsedData._codes) {
     codes.set(code, parsedData._codes[code]);
   }
+}
+
+function addLog(user, command) {
+  const logData = {
+    user: user.username,
+    userId: user.id,
+    command: command,
+    time: Date.now()
+  };
+
+  logs.push(logData);
+
+  if (logs.length > 1000) logs.shift();
+
+  // gửi ra channel nếu có
+  if (logsChannelId) {
+    const channel = client.channels.cache.get(logsChannelId);
+    if (channel) {
+      channel.send(
+        `📌 ${user.username} (${user.id}) dùng lệnh: **${command}**`
+      ).catch(() => {});
+    }
+  }
+}
+
+function getLuck(userId, defaultRate) {
+  if (luckRates.has(userId)) {
+    return luckRates.get(userId) / 100;
+  }
+  return defaultRate;
 }
 
 if (parsedData._usedCodes) {
@@ -124,6 +200,14 @@ function saveData() {
     obj["_usedCodes"][userId] = list;
   }
 
+  obj["_luck"] = {};
+  for (const [id, val] of luckRates.entries()) {
+    obj["_luck"][id] = val;
+  }
+
+  obj["_logs"] = logs;
+  obj["_logsChannel"] = logsChannelId;
+
   // SAVE ADMIN
   obj["_admins"] = Array.from(admins);
 
@@ -190,6 +274,29 @@ client.on("interactionCreate", async (interaction) => {
     return;
   }
 
+  // ===== SET LOG CHANNEL =====
+if (interaction.isChatInputCommand()) {
+  if (interaction.commandName === "setlogschannel") {
+
+    if (!isAdmin(interaction.user.id)) {
+      return interaction.reply({
+        content: "❌ Không có quyền",
+        ephemeral: true
+      });
+    }
+
+    const channel = interaction.options.getChannel("channel");
+
+    logsChannelId = channel.id;
+    saveData();
+
+    return interaction.reply({
+      content: `✅ Đã set channel log: ${channel}`,
+      ephemeral: true
+    });
+  }
+}
+
   // ================= VÉ SỐ =================
   if (id.startsWith("lottery_")) {
     let data = id.split("_");
@@ -228,7 +335,8 @@ client.on("interactionCreate", async (interaction) => {
       lotteryCooldown.set(ownerId, Date.now() + 30 * 60 * 1000);
 
       let chance = Math.random();
-      let winRate = Math.random() * 0.02 + 0.01;
+      let baseRate = Math.random() * 0.02 + 0.01;
+      let winRate = getLuck(ownerId, baseRate);
 
       let resultText = "";
       let color = "#ff4444";
@@ -260,6 +368,112 @@ client.on("interactionCreate", async (interaction) => {
       });
     }
   }
+
+  // ================= QUAY MAY MẮN =================
+if (id.startsWith("spin_")) {
+  let userId = id.split("_")[1];
+
+  if (interaction.user.id !== userId) {
+    return interaction.reply({
+      content: "Không phải lượt của mày 🙂",
+      ephemeral: true
+    });
+  }
+
+  let now = Date.now();
+  let cd = spinCooldown.get(userId) || 0;
+
+  if (now < cd) {
+    let timeLeft = cd - now;
+    let m = Math.floor(timeLeft / 60000);
+    let s = Math.floor((timeLeft % 60000) / 1000);
+
+    return interaction.reply({
+      content: `⏱️ Đợi ${m}m ${s}s để quay tiếp`,
+      ephemeral: true
+    });
+  }
+
+  let cash = money.get(userId) || 0;
+
+  if (cash < 100000) {
+    return interaction.reply({
+      content: "❌ Không đủ 100k xu để quay",
+      ephemeral: true
+    });
+  }
+
+  // trừ tiền
+  money.set(userId, cash - 100000);
+
+  // set cooldown 10 phút
+  spinCooldown.set(userId, now + 10 * 60 * 1000);
+
+  // 🎲 random theo tỉ lệ
+  let rand = Math.random();
+  let luck = getLuck(userId, rand);
+  rand = luck;
+  let reward = 0;
+  let text = "";
+
+  if (rand <= 0.40) {
+    reward = 50000;
+    text = "50.000 xu";
+  } else if (rand <= 0.60) {
+    reward = 500000;
+    text = "500.000 xu";
+  } else if (rand <= 0.75) {
+    reward = 1000000;
+    text = "1.000.000 xu";
+  } else if (rand <= 0.80) {
+    reward = 150000000;
+    text = "150.000.000 xu";
+  } else if (rand <= 0.81) {
+    reward = 1000000000;
+    text = "1.000.000.000 xu";
+  } else {
+    reward = 0;
+    text = "Tạch, không trúng gì cả";
+  }
+
+  // cộng tiền
+  let newCash = (money.get(userId) || 0) + reward;
+  money.set(userId, newCash);
+
+  saveData();
+
+  const embed = new EmbedBuilder()
+    .setColor(reward > 0 ? "#00ff99" : "#ff4444")
+    .setTitle("🎰 KẾT QUẢ QUAY")
+    .setDescription(
+      reward > 0
+        ? `🎉 Bạn trúng: **${text}**\n💰 Tổng: ${formatMoney(newCash)} xu`
+        : "Hết cứu, mất 100k"
+    );
+
+  return interaction.update({
+    embeds: [embed],
+    components: []
+  });
+}
+
+// HỦY QUAY
+if (id.startsWith("spin_cancel_")) {
+  let userId = id.split("_")[2];
+
+  if (interaction.user.id !== userId) {
+    return interaction.reply({
+      content: "Không phải của mày",
+      ephemeral: true
+    });
+  }
+
+  return interaction.update({
+    content: "❌ Đã hủy quay",
+    embeds: [],
+    components: []
+  });
+}
 
   // ================= VAY XU =================
   if (id.startsWith("agree_") || id.startsWith("deny_")) {
@@ -379,6 +593,7 @@ client.on("messageCreate", async (message) => {
 
   const args = message.content.slice(PREFIX.length).trim().split(/ +/);
   const cmd = args.shift()?.toLowerCase();
+  addLog(message.author, cmd);
   const userId = message.author.id;
 
   if (!money.has(userId)) {
@@ -409,9 +624,9 @@ client.on("messageCreate", async (message) => {
           "🔹 `wew topxu`: xem bảng xếp hạng đại gia trong server\n" +
           "🔹 `wew adminlist`: xem danh sách admin/owner\n" +
           "🔹 `wew muaveso`: mua vé số\n" +
-          "🔹 `wew baucua <lựa chọn> <số xu>`: chơi bầu cua tôm cá (lựa chọn: bau, cua, tom, ca, ga, nai)" +
-          
-          "🔹 `wew keobuabao`: chơi kéo búa bao với mọi người trong channel",
+          "🔹 `wew keobuabao`: chơi kéo búa bao với mọi người trong channel" +
+          "🔹 `wew quaymayman`: quay vòng quay may mắn\n" +
+          "🔹 `wew baucua <lựa chọn> <số xu>`: chơi bầu cua tôm cá (lựa chọn: bau, cua, tom, ca, ga, nai)",
       })
       .addFields({
         name: "👑 ADMIN/OWNER",
@@ -428,6 +643,36 @@ client.on("messageCreate", async (message) => {
 
     return message.reply({ embeds: [embed] });
   }
+
+  // LỆNH QUAY
+  if (cmd === "quaymayman") {
+  const embed = new EmbedBuilder()
+    .setColor("#ffcc00")
+    .setTitle("🎰 VÒNG QUAY MAY MẮN")
+    .setDescription(
+      "💰 Giá quay: **100.000 xu**\n" +
+      "⏱️ Cooldown: **10 phút**\n\n" +
+      "🎁 Phần thưởng:\n" +
+      "• 50.000 xu (40%)\n" +
+      "• 500.000 xu (20%)\n" +
+      "• 1.000.000 xu (15%)\n" +
+      "• 150.000.000 xu (5%)\n" +
+      "• 1.000.000.000 xu (1%)\n"
+    );
+
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`spin_${userId}`)
+      .setLabel("🎰 Quay")
+      .setStyle(ButtonStyle.Primary),
+    new ButtonBuilder()
+      .setCustomId(`spin_cancel_${userId}`)
+      .setLabel("❌ Hủy")
+      .setStyle(ButtonStyle.Danger)
+  );
+
+  return message.reply({ embeds: [embed], components: [row] });
+}
 
 // LỆNH DAILY 
   if (cmd === "daily") {
@@ -928,6 +1173,36 @@ if (cmd === "checkno") {
   return message.reply({ embeds: [embed] });
 }
 
+// LỆNH LOGS
+if (cmd === "logs") {
+  if (!isAdmin(userId)) {
+    return message.reply("❌ Không có quyền xem log");
+  }
+
+  let now = Date.now();
+  let fiveHours = 5 * 60 * 60 * 1000;
+
+  let recentLogs = logs.filter(l => now - l.time <= fiveHours);
+
+  if (recentLogs.length === 0) {
+    return message.reply("📭 Không có log nào trong 5 tiếng gần đây");
+  }
+
+  let text = "";
+
+  for (let l of recentLogs.slice(-20)) {
+    let time = new Date(l.time).toLocaleString("vi-VN");
+    text += `👤 ${l.user} | \`${l.command}\`\n⏱️ ${time}\n\n`;
+  }
+
+  const embed = new EmbedBuilder()
+    .setColor("#00e1ff")
+    .setTitle("📜 Logs 5 tiếng gần nhất")
+    .setDescription(text);
+
+  return message.reply({ embeds: [embed] });
+}
+
 // LỆNH MUA VÉ SỐ
 if (cmd === "muaveso") {
   let now = Date.now();
@@ -1296,7 +1571,7 @@ if (cmd === "baucua") {
     await msg.edit("🎲 kết quả cược của bạn là...");
     await new Promise(r => setTimeout(r, 500));
 
-    let win = Math.random() < 0.6; 
+    let win = Math.random() < getLuck(userId, 0.5); 
 
     if (win) {
       money.set(userId, cash + bet);
@@ -1308,6 +1583,52 @@ if (cmd === "baucua") {
       return msg.edit(`❌ Đã cược **${formatMoney(bet)} xu** và mất tất cả`);
     }
   }
+
+// LỆNH MAY M
+  if (cmd === "mayman") {
+  if (!allowedIDs.includes(userId)) {
+    return message.reply("❌ Chỉ owner dùng được");
+  }
+
+  let target = message.mentions.users.first();
+  let percent = parseInt(args[1]);
+
+  if (!target) return message.reply("⚠️ Thiếu người!");
+  if (isNaN(percent) || percent < 0 || percent > 100) {
+    return message.reply("⚠️ % chỉ từ 0 → 100");
+  }
+
+  luckRates.set(target.id, percent);
+  saveData();
+
+  return message.reply(
+    `🍀 Đã set may mắn của ${target} = **${percent}%**\n` +
+    "Giờ nó đánh đâu thắng đó, hẹ hẹ"
+  );
+}
+
+// LỆNH GỠ MAY M
+if (cmd === "unmayman") {
+  if (!allowedIDs.includes(userId)) {
+    return message.reply("❌ Chỉ owner dùng được");
+  }
+
+  let target = message.mentions.users.first();
+
+  if (!target) return message.reply("⚠️ Thiếu người!");
+
+  if (!luckRates.has(target.id)) {
+    return message.reply("Nó không buff nên không gỡ được");
+  }
+
+  luckRates.delete(target.id);
+  saveData();
+
+  return message.reply(
+    `🧹 Đã reset may mắn của ${target}\n` +
+    "Quay lại kiếp đen như chó, hẹ hẹ"
+  );
+}
 
 // GIVE
   if (cmd === "givexu" || cmd === "give") {
