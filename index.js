@@ -102,28 +102,6 @@ function loadData() {
   }
 }
 
-function addLog(user, command) {
-  const logData = {
-    user: user.username,
-    userId: user.id,
-    command: command,
-    time: Date.now()
-  };
-
-  logs.push(logData);
-
-  if (logs.length > 1000) logs.shift();
-
-  // gửi ra channel nếu có
-  if (logsChannelId) {
-    const channel = client.channels.cache.get(logsChannelId);
-    if (channel) {
-      channel.send(
-        `📌 ${user.username} (${user.id}) dùng lệnh: **${command}**`
-      ).catch(() => {});
-    }
-  }
-}
 
 function getLuck(userId, defaultRate) {
   if (luckRates.has(userId)) {
@@ -220,6 +198,28 @@ loadData();
 // Tự động lưu mỗi 30 giây (phòng hờ)
 setInterval(saveData, 30 * 1000);
 // ==========================================
+
+function addLog(user, command) {
+  const logData = {
+    user: user.username,
+    userId: user.id,
+    command: command,
+    time: Date.now()
+  };
+
+  logs.push(logData);
+
+  if (logs.length > 1000) logs.shift();
+
+  if (logsChannelId) {
+    const channel = client.channels.cache.get(logsChannelId);
+    if (channel) {
+      channel.send(
+        `📌 ${user.username} (${user.id}) dùng lệnh: **${command}**`
+      ).catch(() => {});
+    }
+  }
+}
 
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isButton()) return;
