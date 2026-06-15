@@ -1,3 +1,18 @@
+function parseBet(input, userCash) {
+  if (!input) return null;
+
+  input = input.toLowerCase();
+
+  if (input === "all") {
+    return Math.min(userCash, 1_000_000); // max 1 triệu
+  }
+
+  let num = parseInt(input);
+  if (isNaN(num) || num <= 0) return null;
+
+  return num;
+}
+
 const logs = [];
 let logsChannelId = null;
 const luckRates = new Map();
@@ -12,7 +27,7 @@ const fs = require('fs');
 const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
 
 function formatMoney(num) {
-  return Math.floor(num).toLocaleString("vi-VN");
+  return Math.floor(num).toLocaleString("vi-VN") + " VNĐ";
 }
 
 const client = new Client({
@@ -248,7 +263,7 @@ client.on("interactionCreate", async (interaction) => {
     let userId = interaction.user.id;
 
     await interaction.reply({
-      content: "💰 Nhập số xu cược:",
+      content: "💰 Nhập số tiền cược:",
       ephemeral: true
     });
 
@@ -261,15 +276,23 @@ client.on("interactionCreate", async (interaction) => {
     });
 
     collector.on("collect", msg => {
-      let bet = parseInt(msg.content);
-      let cash = money.get(userId) || 0;
+    let cash = money.get(userId) || 0;
+    let bet = parseBet(msg.content, cash);
+
+    if (!bet) {
+      return msg.reply("❌ Nhập số cho đàng hoàng (hoặc 'all')");
+    }
+
+    if (bet > cash) {
+      return msg.reply("❌ Không đủ tiền");
+    }
 
       if (isNaN(bet) || bet <= 0) {
         return msg.reply("❌ Nhập số cho đàng hoàng");
       }
 
       if (bet > cash) {
-        return msg.reply("❌ Không đủ xu");
+        return msg.reply("❌ Không đủ tiền");
       }
 
       money.set(userId, cash - bet);
@@ -281,7 +304,7 @@ client.on("interactionCreate", async (interaction) => {
       });
 
       // ❌ KHÔNG ĐƯỢC LỘ CHOICE
-      msg.reply(`✅ Đã đặt cược ${formatMoney(bet)} xu`);
+      msg.reply(`✅ Đã đặt cược ${formatMoney(bet)} VNĐ`);
     });
 
     return;
@@ -361,7 +384,7 @@ if (interaction.isChatInputCommand()) {
         money.set(ownerId, newCash);
 
         resultText =
-          `🎉 TRÚNG!!!\n💰 +${formatMoney(reward)} xu\n🏦 Tổng: ${formatMoney(newCash)}`;
+          `🎉 TRÚNG!!!\n💰 +${formatMoney(reward)} VNĐ\n🏦 Tổng: ${formatMoney(newCash)}`;
 
         color = "#00ff99";
       } else {
@@ -430,7 +453,7 @@ if (interaction.isChatInputCommand()) {
 
     if (cash < 100000) {
       return interaction.reply({
-        content: "❌ Không đủ 100k xu để quay",
+        content: "❌ Không đủ 100k VNĐ để quay",
         ephemeral: true
       });
     }
@@ -448,19 +471,19 @@ if (interaction.isChatInputCommand()) {
 
     if (rand <= 0.40) {
       reward = 50000;
-      text = "50.000 xu";
+      text = "50.000 VNĐ";
     } else if (rand <= 0.60) {
       reward = 500000;
-      text = "500.000 xu";
+      text = "500.000 VNĐ";
     } else if (rand <= 0.75) {
       reward = 1000000;
-      text = "1.000.000 xu";
+      text = "1.000.000 VNĐ";
     } else if (rand <= 0.80) {
       reward = 150000000;
-      text = "150.000.000 xu";
+      text = "150.000.000 VNĐ";
     } else if (rand <= 0.81) {
       reward = 1000000000;
-      text = "1.000.000.000 xu";
+      text = "1.000.000.000 VNĐ";
     } else {
       reward = 0;
       text = "Tạch, không trúng gì cả";
@@ -475,7 +498,7 @@ if (interaction.isChatInputCommand()) {
       .setTitle("🎰 KẾT QUẢ QUAY")
       .setDescription(
         reward > 0
-          ? `🎉 Bạn trúng: **${text}**\n💰 Tổng: ${formatMoney(newCash)} xu`
+          ? `🎉 Bạn trúng: **${text}**\n💰 Tổng: ${formatMoney(newCash)} VNĐ`
           : "Hết cứu, mất 100k"
       );
 
@@ -508,7 +531,7 @@ if (id.startsWith("spin_cancel_")) {
   });
 }
 
-  // ================= VAY XU =================
+  // ================= VAY TIỀN =================
   if (id.startsWith("agree_") || id.startsWith("deny_")) {
     const data = id.split("_");
 
@@ -537,7 +560,7 @@ if (id.startsWith("spin_cancel_")) {
       saveData();
 
       return interaction.update({
-        content: `✅ Đã cho vay ${formatMoney(amount)} xu`,
+        content: `✅ Đã cho vay ${formatMoney(amount)} VNĐ`,
         embeds: [],
         components: []
       });
@@ -644,29 +667,29 @@ client.on("messageCreate", async (message) => {
         name: "💰 Lệnh bình thường",
         value:
           "🔹 `wew daily`: nhận phần thưởng mỗi ngày\n" +
-          "🔹 `wew xu`: xem số xu có trong ví\n" +
-          "🔹 `wew cf <số xu/all>`: cược xu 50/50\n" +
-          "🔹 `wew givexu @user <số xu>`: tặng xu cho người khác\n" +
-          "🔹 `wew gt <tên ngân hàng> <số xu>`: gửi xu vào ngân hàng\n" +
-          "🔹 `wew rt <tên ngân hàng> <số xu>`: rút xu từ ngân hàng\n" +
+          "🔹 `wew tien`: xem số tiền có trong ví\n" +
+          "🔹 `wew cf <số tiền/all>`: cược tiền 50/50\n" +
+          "🔹 `wew givetien @user <số tiền>`: tặng tiền cho người khác\n" +
+          "🔹 `wew gt <tên ngân hàng> <số tiền>`: gửi tiền vào ngân hàng\n" +
+          "🔹 `wew rt <tên ngân hàng> <số tiền>`: rút tiền từ ngân hàng\n" +
           "🔹 `wew checknh`: kiểm tra số dư các ngân hàng\n" +
-          "🔹 `wew vayxu @user <số xu>`: yêu cầu vay xu từ người khác\n" +
+          "🔹 `wew vaytien @user <số tiền>`: yêu cầu vay tiền từ người khác\n" +
           "🔹 `wew trano @user`: trả nợ cho người vay\n" +
           "🔹 `wew checkno`: kiểm tra các khoản nợ của bạn\n" +
-          "🔹 `wew nhapcode <tên code>`: nhập code để nhận xu\n" +
-          "🔹 `wew topxu`: xem bảng xếp hạng đại gia trong server\n" +
+          "🔹 `wew nhapcode <tên code>`: nhập code để nhận tiền\n" +
+          "🔹 `wew topdaigia`: xem bảng xếp hạng đại gia trong server\n" +
           "🔹 `wew adminlist`: xem danh sách admin/owner\n" +
           "🔹 `wew muaveso`: mua vé số\n" +
           "🔹 `wew quaymayman`: quay vòng quay may mắn\n" +
           "🔹 `wew keobuabao`: chơi kéo búa bao với mọi người trong channel" +
-          "🔹 `wew baucua <lựa chọn> <số xu>`: chơi bầu cua tôm cá (lựa chọn: bau, cua, tom, ca, ga, nai)",
+          "🔹 `wew baucua <lựa chọn> <số tiền>`: chơi bầu cua (bau, cua, tom, ca, ga, nai)",
       })
       .addFields({
         name: "👑 ADMIN/OWNER",
         value:
-          "🔹 `wew addxu <tên người> <số xu>`: thêm xu cho người khác\n" +
-          "🔹 `wew thuxu <tên người> <số xu>`: thu xu từ người khác\n"+
-          "🔹 `wew checkxu @user`: kiểm tra số xu của người khác\n" +
+          "🔹 `wew addtien <tên người> <số tiền>`: thêm tiền cho người khác\n" +
+          "🔹 `wew thutien <tên người> <số tiền>`: thu tiền từ người khác\n"+
+          "🔹 `wew checktien @user`: kiểm tra số tiền của người khác\n" +
           "🔹 `wew addadmin <id>`: thêm admin\n" +
           "🔹 `wew unadmin <id>`: xóa admin\n" +
           "🔹 `wew recode <tên code>`: xóa code\n" +
@@ -674,7 +697,7 @@ client.on("messageCreate", async (message) => {
           "🔹 `wew logs`: xem log\n" +
           "🔹 `wew mayman @user <phần trăm may mắn>`: tăng số may mắn lên \n" +
           "🔹 `wew unmayman @user`: reset số phần trăm may mắn\n" +
-          "🔹 `wew addcode <tên code> <số xu> <số lần có thể nhạp>`: thêm code mới\n",
+          "🔹 `wew addcode <tên code> <số tiền> <số lần có thể nhập>`: thêm code mới\n",
       })
       .setFooter({ text: "WEW BOT ● MADE BY CAUBEVOTRI" });
 
@@ -687,14 +710,14 @@ client.on("messageCreate", async (message) => {
     .setColor("#ffcc00")
     .setTitle("🎰 VÒNG QUAY MAY MẮN")
     .setDescription(
-      "💰 Giá quay: **100.000 xu**\n" +
+      "💰 Giá quay: **100.000 VNĐ**\n" +
       "⏱️ Cooldown: **10 phút**\n\n" +
       "🎁 Phần thưởng:\n" +
-      "• 50.000 xu (40%)\n" +
-      "• 500.000 xu (20%)\n" +
-      "• 1.000.000 xu (15%)\n" +
-      "• 150.000.000 xu (5%)\n" +
-      "• 1.000.000.000 xu (1%)\n"
+      "• 50.000 VNĐ (40%)\n" +
+      "• 500.000 VNĐ (20%)\n" +
+      "• 1.000.000 VNĐ (15%)\n" +
+      "• 150.000.000 VNĐ (5%)\n" +
+      "• 1.000.000.000 VNĐ (1%)\n"
     );
 
   const row = new ActionRowBuilder().addComponents(
@@ -765,14 +788,14 @@ client.on("messageCreate", async (message) => {
     let s = Math.floor((diffMs % (1000 * 60)) / 1000);
 
     return message.reply(
-      `💰 ${message.author.username} đã nhận phần thưởng là ${formatMoney(reward)} xu 💵\n` +
+      `💰 ${message.author.username} đã nhận phần thưởng là ${formatMoney(reward)} VNĐ 💵\n` +
       `🔥 chuỗi hôm nay là: ${currentStreak}\n` +
       `⏱️ Cần đợi ${h}H ${m}M ${s}S để nhận phần thưởng tiếp theo`
     );
   }
 
-// Lệnh Top xu
-if (cmd === "topxu") {
+// Lệnh Top VNĐ
+if (cmd === "topdaigia") {
   let list = [];
 
   // lấy toàn bộ user từ money map (tức toàn bot)
@@ -799,13 +822,13 @@ if (cmd === "topxu") {
       user = { username: "Unknown" };
     }
 
-    result += `🏅 Top ${i + 1}: ${user.username} — **${formatMoney(top[i].cash)} xu**\n`;
+    result += `🏅 Top ${i + 1}: ${user.username} — **${formatMoney(top[i].cash)} VNĐ**\n`;
   }
 
   const embed = new EmbedBuilder()
     .setColor("#00e1ff")
-    .setTitle("🏆 Top Xu Toàn Bộ Server")
-    .setDescription(result || "Không có dữ liệu 🤡");
+    .setTitle("🏆 Top Đại Gia Toàn Bộ Server")
+    .setDescription(result || "Không có dữ liệu");
 
   return message.reply({ embeds: [embed] });
 }
@@ -822,7 +845,7 @@ if (cmd === "addcode") {
 
   if (!code) return message.reply("⚠️ Thiếu tên code!");
   if (code.includes(" ")) return message.reply("Code không được có khoảng cách!");
-  if (isNaN(reward) || reward <= 0) return message.reply("Số xu không hợp lệ!");
+  if (isNaN(reward) || reward <= 0) return message.reply("Số tiền không hợp lệ!");
   if (isNaN(maxUses) || maxUses <= 0) return message.reply("Số lượt không hợp lệ!");
 
   if (codes.has(code)) {
@@ -908,7 +931,7 @@ if (cmd === "nhapcode") {
 
   saveData();
 
-  return message.reply(`🎉 Bạn đã nhận được: **${formatMoney(data.reward)} xu**`);
+  return message.reply(`🎉 Bạn đã nhận được: **${formatMoney(data.reward)} VNĐ**`);
 }
 
 // LỆNH ADD ADMIN
@@ -974,7 +997,7 @@ if (cmd === "keobuabao") {
     .setTitle("🎮 KÉO - BÚA - BAO")
     .setDescription(
       "👉 Bấm nút để tham gia\n" +
-      "💰 Sau khi bấm sẽ nhập số xu cược\n" +
+      "💰 Sau khi bấm sẽ nhập số tiền cược\n" +
       "⏱️ 30 giây bắt đầu tính từ lúc tạo\n\n" +
       "✂️ Kéo > Bao\n🪨 Búa > Kéo\n📄 Bao > Búa"
     );
@@ -1049,7 +1072,7 @@ if (cmd === "keobuabao") {
     let resultText = "";
 
     for (let p of players) {
-      resultText += `<@${p.userId}>: ${choices[p.choice].icon} (${formatMoney(p.bet)} xu)\n`;
+      resultText += `<@${p.userId}>: ${choices[p.choice].icon} (${formatMoney(p.bet)} VNĐ)\n`;
     }
 
     for (let w of winners) {
@@ -1070,7 +1093,7 @@ if (cmd === "keobuabao") {
       })
       .addFields({
         name: "🎁 Tiền nhận",
-        value: `${formatMoney(reward)} xu mỗi người`
+        value: `${formatMoney(reward)} VNĐ mỗi người`
       });
 
     msg.edit({ embeds: [resultEmbed], components: [] });
@@ -1078,27 +1101,27 @@ if (cmd === "keobuabao") {
   }, 30000);
 }
 
-// LỆNH VAY XU
-if (cmd === "vayxu") {
+// LỆNH VAY TIỀN
+if (cmd === "vaytien") {
   let target = message.mentions.users.first();
   let amount = parseInt(args[1]);
 
   if (!target) return message.reply("⚠️ Thiếu người cho vay!");
   if (target.id === userId) return message.reply("Tự vay luôn đi cho nhanh 😐");
-  if (isNaN(amount) || amount <= 0) return message.reply("Số xu không hợp lệ!");
+  if (isNaN(amount) || amount <= 0) return message.reply("Số tiền không hợp lệ!");
 
   let targetCash = money.get(target.id) || 10000;
 
   if (amount > targetCash) {
-    return message.reply(`❌ Người này không đủ xu! Hiện có: **${formatMoney(targetCash)} xu**`);
+    return message.reply(`❌ Người này không đủ tiền! Hiện có: **${formatMoney(targetCash)} VNĐ**`);
   }
 
   const embed = new EmbedBuilder()
     .setColor("#f5d400")
-    .setTitle("📩 Yêu cầu vay xu")
+    .setTitle("📩 Yêu cầu vay tiền")
     .setDescription(
       `👤 Người vay: ${message.author}\n` +
-      `💰 Số tiền: **${formatMoney(amount)} xu**\n\n` +
+      `💰 Số tiền: **${formatMoney(amount)} VNĐ**\n\n` +
       `👉 ${target} hãy bấm nút bên dưới để quyết định`
     );
 
@@ -1151,7 +1174,7 @@ if (cmd === "trano") {
     saveData();
 
     return message.reply(
-      `💸 Đã trả hết **${formatMoney(debt)} xu** cho ${target}`
+      `💸 Đã trả hết **${formatMoney(debt)} VNĐ** cho ${target}`
     );
   }
 
@@ -1166,7 +1189,7 @@ if (cmd === "trano") {
   saveData();
 
   return message.reply(
-    `⚠️ Đã trả **${formatMoney(paid)} xu**\nCòn nợ: **${formatMoney(remaining)} xu**`
+    `⚠️ Đã trả **${formatMoney(paid)} VNĐ**\nCòn nợ: **${formatMoney(remaining)} VNĐ**`
   );
 }
 
@@ -1198,7 +1221,7 @@ if (cmd === "checkno") {
   let desc = "";
 
   list.forEach((item, index) => {
-    desc += `💸 ${index + 1}. <@${item.lenderId}>: **${formatMoney(item.amount)} xu**\n`;
+    desc += `💸 ${index + 1}. <@${item.lenderId}>: **${formatMoney(item.amount)} VNĐ**\n`;
   });
 
   const embed = new EmbedBuilder()
@@ -1257,9 +1280,9 @@ if (cmd === "muaveso") {
     .setColor("#ffd700")
     .setTitle("🎟️ MUA VÉ SỐ")
     .setDescription(
-      "💰 Giá: **10,000 xu**\n" +
+      "💰 Giá: **10,000 VNĐ**\n" +
       "🎯 Tỉ lệ trúng: **1% - 3%**\n" +
-      "🏆 Trúng nhận: **10T - 30T xu**\n\n" +
+      "🏆 Trúng nhận: **10T - 30T VNĐ**\n\n" +
       "👉 Bạn có chắc muốn mua không?"
     );
 
@@ -1323,20 +1346,29 @@ if (cmd === "baucua") {
   };
 
   let choice = args[0]?.toLowerCase();
-  let bet = parseInt(args[1]);
+  let cash = money.get(userId) || 0;
+  let bet = parseBet(args[1], cash);
+
+  if (!bet) {
+    return message.reply("❌ Nhập số tiền hợp lệ hoặc");
+  }
+
+  if (bet > cash) {
+    return message.reply("❌ Không đủ tiền");
+  }
 
   if (!choice || !animals.includes(choice)) {
     return message.reply("❌ Chọn sai linh vật. Dùng: bau, cua, tom, ca, ga, nai");
   }
 
   if (!bet || bet <= 0) {
-    return message.reply("❌ Số xu cược không hợp lệ");
+    return message.reply("❌ Số tiền cược không hợp lệ");
   }
 
   let userMoney = money.get(userId) || 0;
 
   if (userMoney < bet) {
-    return message.reply("❌ Không đủ xu để chơi");
+    return message.reply("❌ Không đủ tiền để chơi");
   }
 
   // 🎲 quay 3 lần
@@ -1381,12 +1413,12 @@ if (cmd === "baucua") {
         name: count > 0 ? "💰 Kết quả" : "💸 Kết quả",
         value:
           count > 0
-            ? `Trúng **${count} lần**\n+${formatMoney(win)} xu`
-            : `Thua sạch\n-${formatMoney(bet)} xu`
+            ? `Trúng **${count} lần**\n+${formatMoney(win)} VNĐ`
+            : `Thua sạch\n-${formatMoney(bet)} VNĐ`
       },
       {
         name: "🏦 Số dư",
-        value: `${formatMoney(userMoney)} xu`
+        value: `${formatMoney(userMoney)} VNĐ`
       }
     )
     .setFooter({ text: "Chơi vui thôi, đừng all-in rồi khóc 😏" });
@@ -1413,7 +1445,7 @@ if (cmd === "baucua") {
         }
       }
       desc += `💵 ${bank.name}\n`;
-      desc += `**${formatMoney(amount)} xu** (Lãi ${(bank.interest * 100).toFixed(0)}%/${bank.duration / 86400000} ngày)\n\n`;
+      desc += `**${formatMoney(amount)} VNĐ** (Lãi ${(bank.interest * 100).toFixed(0)}%/${bank.duration / 86400000} ngày)\n\n`;
     }
 
     embed.setDescription(desc);
@@ -1423,9 +1455,9 @@ if (cmd === "baucua") {
   }
 
   // XEM TIỀN
-  if (cmd === "xu") {
+  if (cmd === "tien") {
     let cash = money.get(userId);
-    message.reply(`💰 Số xu trong ví của bạn là: **${formatMoney(cash)} xu**`);
+    message.reply(`💰 Số tiền trong ví của bạn là: **${formatMoney(cash)} VNĐ**`);
   }
 
 // GỬI NGÂN HÀNG
@@ -1440,10 +1472,10 @@ if (cmd === "baucua") {
 
     if (!bankInput) return message.reply("⚠️ Thiếu tên ngân hàng!");
     if (!bankKey) return message.reply("Ngân hàng không tồn tại!");
-    if (isNaN(amount) || amount <= 0) return message.reply("Số xu không hợp lệ!");
+    if (isNaN(amount) || amount <= 0) return message.reply("Số tiền không hợp lệ!");
 
     if (amount > cash) {
-      return message.reply(`Không đủ xu (${formatMoney(cash)})`);
+      return message.reply(`Không đủ tiền (${formatMoney(cash)})`);
     }
 
     updateBank(userId);
@@ -1471,7 +1503,7 @@ if (cmd === "baucua") {
     saveData(); 
 
     message.reply(
-      `**ĐÃ GỬI THÀNH CÔNG:** Bạn đã gửi **${formatMoney(amount)} xu** vào ngân hàng **${bank.name}**`
+      `**ĐÃ GỬI THÀNH CÔNG:** Bạn đã gửi **${formatMoney(amount)} VNĐ** vào ngân hàng **${bank.name}**`
     );
   }
 
@@ -1482,19 +1514,19 @@ if (cmd === "baucua") {
 
     if (!bankInput) return message.reply("⚠️ Thiếu tên ngân hàng cần rút!");
     if (!bankKey) return message.reply("Ngân hàng không tồn tại!");
-    if (!bankData.has(userId)) return message.reply("Bạn không có xu trong ngân hàng này!");
+    if (!bankData.has(userId)) return message.reply("Bạn không có tiền trong ngân hàng này!");
 
     updateBank(userId);
     let data = bankData.get(userId);
 
-    if (data.bank !== bankKey) return message.reply("Bạn không có xu trong ngân hàng này!");
+    if (data.bank !== bankKey) return message.reply("Bạn không có tiền trong ngân hàng này!");
 
     // Xử lý nhập "all" lấy tối đa tiền trong thẻ
     let amountArg = args[args.length - 1]?.toLowerCase();
     let amount = amountArg === "all" ? data.amount : parseInt(amountArg);
 
-    if (isNaN(amount) || amount <= 0) return message.reply("Số xu không hợp lệ!");
-    if (amount > data.amount) return message.reply("Không đủ xu trong ngân hàng!");
+    if (isNaN(amount) || amount <= 0) return message.reply("Số tiền không hợp lệ!");
+    if (amount > data.amount) return message.reply("Không đủ tiền trong ngân hàng!");
 
     data.amount -= amount;
 
@@ -1507,28 +1539,28 @@ if (cmd === "baucua") {
     money.set(userId, money.get(userId) + amount);
     saveData(); 
 
-    message.reply(`**ĐÃ RÚT THÀNH CÔNG:** Bạn đã rút **${formatMoney(amount)} xu** khỏi ngân hàng **${banks[bankKey].name}**`);
+    message.reply(`**ĐÃ RÚT THÀNH CÔNG:** Bạn đã rút **${formatMoney(amount)} VNĐ** khỏi ngân hàng **${banks[bankKey].name}**`);
   }
 
-  // ADD XU
-  if (cmd === "addxu" || cmd === "add") {
+  // ADD TIEN
+  if (cmd === "addtien" || cmd === "add") {
     if (!isAdmin(userId)) return message.reply("❌ Bạn không có quyền sử dụng lệnh này!");
 
     let target = message.mentions.users.first();
     let amount = parseInt(args[1]);
 
     if (!target) return message.reply("⚠️ Thiếu người cần add!");
-    if (isNaN(amount) || amount <= 0) return message.reply("Số xu không hợp lệ!");
+    if (isNaN(amount) || amount <= 0) return message.reply("Số tiền không hợp lệ!");
     if (!money.has(target.id)) money.set(target.id, 10000);
 
     money.set(target.id, money.get(target.id) + amount);
     saveData(); 
 
-    message.reply(`Đã thêm **${formatMoney(amount)} xu** cho ${target}`);
+    message.reply(`Đã thêm **${formatMoney(amount)} VNĐ** cho ${target}`);
   }
 
-// THU XU
-  if (cmd === "thuxu" || cmd === "thu") {
+// THU TIEN
+  if (cmd === "thutien" || cmd === "thu") {
     if (!isAdmin(userId)) return message.reply("❌ Bạn không có quyền sử dụng lệnh này!");
 
     let target = message.mentions.users.first();
@@ -1541,17 +1573,17 @@ if (cmd === "baucua") {
     let amountArg = args[1]?.toLowerCase();
     let amount = amountArg === "all" ? current : parseInt(amountArg);
 
-    if (isNaN(amount) || amount <= 0) return message.reply("Số xu không hợp lệ!");
-    if (amount > current) return message.reply("Không đủ xu để thu!");
+    if (isNaN(amount) || amount <= 0) return message.reply("Số tiền không hợp lệ!");
+    if (amount > current) return message.reply("Không đủ tiền để thu!");
 
     money.set(target.id, current - amount);
     saveData(); 
 
-    message.reply(`Đã thu **${formatMoney(amount)} xu** từ ${target}`);
+    message.reply(`Đã thu **${formatMoney(amount)} VNĐ** từ ${target}`);
   }
   
-  // CHECK XU NGƯỜI KHÁC
-  if (cmd === "checkxu") {
+  // CHECK TIỀN NGƯỜI KHÁC
+  if (cmd === "checktien") {
     if (!isAdmin(userId)) {
       return message.reply("❌ Bạn không có quyền sử dụng lệnh này!");
     }
@@ -1567,7 +1599,7 @@ if (cmd === "baucua") {
       targetCash = 10000;
     }
 
-    message.reply(`🔍 Số xu hiện tại của **${target.username}** là: **${formatMoney(targetCash)} xu**`);
+    message.reply(`🔍 Số tiền hiện tại của **${target.username}** là: **${formatMoney(targetCash)} VNĐ**`);
   }
 
   // CƯỢC
@@ -1587,11 +1619,23 @@ if (cmd === "baucua") {
       return; 
     }
 
-    let bet = betArg === "all" ? cash : parseInt(betArg);
+    let bet;
 
-    if (!betArg) return message.reply("⚠️ Thiếu số xu muốn cược!");
-    if (isNaN(bet) || bet <= 0) return message.reply("Số xu không hợp lệ!");
-    if (bet > cash) return message.reply("Không đủ xu để cược!");
+    if (betArg === "all") {
+      bet = Math.min(cash, 1_000_000); // cap 1 triệu
+    } else {
+      bet = parseInt(betArg);
+    }
+
+    if (!betArg) return message.reply("⚠️ Thiếu số tiền muốn cược!");
+
+    if (betArg !== "all" && (isNaN(bet) || bet <= 0)) {
+      return message.reply("❌ Số tiền không hợp lệ!");
+    }
+
+    if (bet > cash) {
+      return message.reply("❌ Không đủ tiền để cược!");
+    }
 
     cooldown.set(userId, now + 10000);
 
@@ -1613,11 +1657,11 @@ if (cmd === "baucua") {
     if (win) {
       money.set(userId, cash + bet);
       saveData(); 
-      return msg.edit(`🎉 Chúc mừng thắng lớn, đã nhận về **${formatMoney(bet * 2)} xu**!`);
+      return msg.edit(`🎉 Chúc mừng thắng lớn, đã nhận về **${formatMoney(bet * 2)} VNĐ**!`);
     } else {
       money.set(userId, cash - bet);
       saveData(); 
-      return msg.edit(`❌ Đã cược **${formatMoney(bet)} xu** và mất tất cả`);
+      return msg.edit(`❌ Đã cược **${formatMoney(bet)} VNĐ** và mất tất cả`);
     }
   }
 
@@ -1668,7 +1712,7 @@ if (cmd === "unmayman") {
 }
 
 // GIVE
-  if (cmd === "givexu" || cmd === "give") {
+  if (cmd === "givetien" || cmd === "give") {
     let target = message.mentions.users.first();
     let cash = money.get(userId);
 
@@ -1678,10 +1722,10 @@ if (cmd === "unmayman") {
 
     if (!target) return message.reply("⚠️ Thiếu tên người cần chuyển!");
     if (target.id === userId) return message.reply("Không thể chuyển cho chính bản thân!");
-    if (isNaN(amount) || amount <= 0) return message.reply("Số xu không hợp lệ!");
+    if (isNaN(amount) || amount <= 0) return message.reply("Số tiền không hợp lệ!");
 
     if (amount > cash) {
-      return message.reply(`Số xu của bạn không đủ! Bạn có **${formatMoney(cash)} xu**`);
+      return message.reply(`Số tiền của bạn không đủ! Bạn có **${formatMoney(cash)} VNĐ**`);
     }
 
     if (!money.has(target.id)) {
@@ -1692,7 +1736,7 @@ if (cmd === "unmayman") {
     money.set(target.id, money.get(target.id) + amount);
     saveData(); 
 
-    message.reply(`Bạn đã chuyển **${formatMoney(amount)} xu** cho ${target}`);
+    message.reply(`Bạn đã chuyển **${formatMoney(amount)} VNĐ** cho ${target}`);
   }
 
 });
