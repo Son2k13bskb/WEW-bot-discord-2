@@ -507,23 +507,16 @@ client.once("ready", async () => {
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
 
-  // ================= XỬ LÝ GAME NỐI TỪ =================
+// ================= XỬ LÝ GAME NỐI TỪ =================
   if (wordGameState.isPlaying && wordGameChannelId === message.channel.id) {
     const rawInput = message.content.trim();
-    const lowerInput = rawInput.toLowerCase();
+    const lowerInput = rawInput.toLowerCase().normalize("NFC");
 
     if (lowerInput === `${PREFIX} stop`.toLowerCase() || lowerInput === "wew stop") {
-      // Cho đi tiếp xuống xử lý lệnh stop
+      // Cho đi tiếp xuống xử lý lệnh stop ở phía dưới
     } else if (!message.content.toLowerCase().startsWith(PREFIX.toLowerCase())) {
       
-      // 1. Chặn người chơi nối liên tiếp
-      if (wordGameState.lastUserId === message.author.id) {
-        return message.reply("⚠️ Bạn đã nối rồi, đợi người khác nối tiếp nhé!")
-          .then(msg => setTimeout(() => msg.delete().catch(() => {}), 4000))
-          .catch(() => {});
-      }
-
-      // 2. Kiểm tra từ có nghĩa trong từ điển không
+      // 1. Kiểm tra từ có nghĩa trong từ điển không
       if (!wordDictionary.includes(lowerInput)) {
         await message.react('❌').catch(() => {});
         return message.reply("❌ Từ này không có trong từ điển tiếng Việt!")
@@ -531,7 +524,7 @@ client.on("messageCreate", async (message) => {
           .catch(() => {});
       }
 
-      // 3. Kiểm tra quy tắc nối ký tự đầu - cuối
+      // 2. Kiểm tra quy tắc nối ký tự đầu - cuối
       const botCurrentWords = wordGameState.currentWord.split(" ");
       const lastBotSyllable = botCurrentWords[botCurrentWords.length - 1];
       const userWords = lowerInput.split(" ");
@@ -541,15 +534,15 @@ client.on("messageCreate", async (message) => {
         return message.reply(`⚠️ Đang nối với từ : **${wordGameState.currentWord}**`);
       }
 
-      // 4. Đúng luật: Tích ✅, cộng tiền âm thầm (50 - 100 VNĐ)
+      // 3. Đúng luật: Tích ✅, cộng tiền âm thầm (50 - 100 VNĐ)
       await message.react('✅').catch(() => {});
-      wordGameState.lastUserId = message.author.id;
+      wordGameState.lastUserId = message.author.id; // Vẫn lưu lại để tracking nếu cần
 
       const silentReward = Math.floor(Math.random() * (100 - 50 + 1)) + 50;
       money.set(message.author.id, (money.get(message.author.id) || 10000) + silentReward);
       saveData();
 
-      // 5. Bot tự tìm từ nối tiếp từ của người dùng
+      // 4. Bot tự tìm từ nối tiếp từ của người dùng
       const lastUserSyllable = userWords[userWords.length - 1];
       const validBotChoices = wordDictionary.filter(w => {
         const parts = w.split(" ");
