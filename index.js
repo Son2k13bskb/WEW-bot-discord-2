@@ -483,18 +483,24 @@ function updateBank(userId) {
 
 client.once("ready", async () => {
     console.log(`🤖 Bot đã online với tên ${client.user.tag}`);
+    
+    // Tự động kéo kho dữ liệu Từ điển Tiếng Việt từ Github winstonleedev
     try {
-      const res = await fetch("https://raw.githubusercontent.com/duyet/vietnamese-wordlist/master/vietnamese-wordlist.txt");
+      const res = await fetch("https://raw.githubusercontent.com/winstonleedev/tudien/master/tudien.txt");
       if (res.ok) {
         const text = await res.text();
-        const rawWords = text.split("\n").map(w => w.trim().toLowerCase()).filter(w => w && w.length > 1 && !w.startsWith("#"));
+        // Tách dòng, loại bỏ khoảng trắng dư, chuyển in thường, chuẩn hóa bộ gõ NFC
+        const rawWords = text.split("\n")
+          .map(w => w.trim().toLowerCase().normalize("NFC"))
+          .filter(w => w && w.length > 1 && !w.startsWith("#"));
+          
         if (rawWords.length > 0) {
           wordDictionary = Array.from(new Set([...wordDictionary, ...rawWords]));
-          console.log(`📚 Đã nạp từ điển nối từ gồm ${wordDictionary.length} từ!`);
+          console.log(`📚 Đã nạp thành công từ điển nối từ gồm ${wordDictionary.length} từ!`);
         }
       }
     } catch (e) {
-      console.log("⚠️ Sử dụng từ điển mặc định có sẵn.");
+      console.log("⚠️ Không tải được từ điển mở rộng từ GitHub, bot sẽ sử dụng từ điển mặc định có sẵn.");
     }
 });
 
