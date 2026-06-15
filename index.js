@@ -61,7 +61,7 @@ const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
 (async () => {
   try {
     await rest.put(
-      Routes.applicationCommands("process.env.CLIENT"),
+      Routes.applicationCommands(process.env.CLIENT),
       { body: slashCommands }
     );
     console.log("✅ Đã đăng ký slash command");
