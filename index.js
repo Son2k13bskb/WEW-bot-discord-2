@@ -647,7 +647,7 @@ client.once("ready", async () => {
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
 
-// ================= XỬ LÝ GAME NỐI TỪ =================
+  // ================= XỬ LÝ GAME NỐI TỪ =================
   let serverWordChannel = message.guild ? serverWordGameConfigs.get(message.guild.id) : null;
   if (wordGameState.isPlaying && serverWordChannel === message.channel.id) {
     const rawInput = message.content.trim();
@@ -724,6 +724,104 @@ client.on("messageCreate", async (message) => {
   if (!money.has(userId)) {
     money.set(userId, 10000);
     saveData(); 
+  }
+
+  // ================= LỆNH SÀN ĐUA NGỰA =================
+  if (cmd === "sanduangua") {
+    if (args.length < 2) {
+      return message.reply("⚠️ Cú pháp đúng: `wew sanduangua (chọn số ngựa từ 1-6) (số tiền cược)`");
+    }
+
+    let horseNum = parseInt(args[0]);
+    if (isNaN(horseNum) || horseNum < 1 || horseNum > 6) {
+      return message.reply("⚠️ Vui lòng chọn một con ngựa hợp lệ trong khoảng từ số 1 đến số 6!");
+    }
+
+    let cash = money.get(userId) || 0;
+    let bet = parseBet(args[1], cash);
+
+    if (!bet) return message.reply("❌ Nhập số tiền cược cho đàng hoàng (hoặc viết 'all')!");
+    if (bet > cash) return message.reply("❌ Bạn không đủ tiền trong ví để tham gia đặt cược!");
+
+    money.set(userId, cash - bet);
+    saveData();
+
+    const winningHorse = Math.floor(Math.random() * 6) + 1;
+    const maxDistance = 25;
+    let positions = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
+
+    const renderRace = (posMap, maxDist) => {
+      let lines = [];
+      for (let i = 1; i <= 6; i++) {
+        let pos = posMap[i];
+        let dashes = "=".repeat(pos);
+        let spaces = " ".repeat(maxDist - pos);
+        let head = pos >= maxDist ? "" : ">";
+        lines.push(`🐎${i}: ${dashes}${head}${spaces}🏁`);
+      }
+      return "```\n" + lines.join("\n") + "\n```";
+    };
+
+    let raceMessage = await message.reply(
+      `🏁 **SÀN ĐUA NGỰA WEW BẮT ĐẦU!** 🏁\n` +
+      `👤 Người chơi: ${message.author}\n` +
+      `🐎 Đặt cược vào: **Ngựa số ${horseNum}**\n` +
+      `💰 Số tiền cược: **${formatMoney(bet)}**\n\n` +
+      renderRace(positions, maxDistance)
+    );
+
+    let interval = setInterval(async () => {
+      if (positions[winningHorse] >= maxDistance) {
+        clearInterval(interval);
+
+        let isWin = (horseNum === winningHorse);
+        let resultText = "";
+
+        if (isWin) {
+          let reward = bet * 2;
+          let newCash = (money.get(userId) || 0) + reward;
+          money.set(userId, newCash);
+          saveData();
+
+          resultText = `🎉 **CHÚC MỪNG CHIẾN THẮNG!!!** Ngựa số **${winningHorse}** đã về đích xuất sắc!\n` +
+                       `💰 Bạn đã đoán chính xác và nhận được: **+${formatMoney(reward)}** (X6 tiền cược)\n` +
+                       `🏦 Số dư hiện tại của bạn: **${formatMoney(newCash)}**`;
+        } else {
+          resultText = `**THẤT BẠI!!!** Ngựa số **${winningHorse}** mới là con cán đích trước.\n` +
+                       `💸 Bạn đã mất trắng **${formatMoney(bet)}** cược cho Ngựa số **${horseNum}**. Chúc bạn may mắn lần sau!`;
+        }
+
+        await raceMessage.edit(
+          `🏁 **KẾT QUẢ SÀN ĐUA NGỰA** 🏁\n\n` +
+          renderRace(positions, maxDistance) + `\n` +
+          `${resultText}`
+        ).catch(() => {});
+        return;
+      }
+
+      for (let i = 1; i <= 6; i++) {
+        let move = Math.floor(Math.random() * 3) + 1; 
+        
+        if (i === winningHorse) {
+          move = Math.floor(Math.random() * 3) + 2;
+        }
+        
+        positions[i] += move;
+
+        if (i !== winningHorse && positions[i] >= maxDistance) {
+          positions[i] = maxDistance - 1;
+        }
+        if (i === winningHorse && positions[i] >= maxDistance) {
+          positions[i] = maxDistance;
+        }
+      }
+
+      await raceMessage.edit(
+        `🏁 **SÀN ĐUA NGỰA ĐANG DIỄN RA KỊCH TÍNH...** 🏁\n\n` +
+        renderRace(positions, maxDistance)
+      ).catch(() => {});
+
+    }, 1200);
   }
 
   // ================= LỆNH BẮT ĐẦU CHƠI NỐI TỪ =================
