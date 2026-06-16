@@ -784,7 +784,7 @@ client.on("messageCreate", async (message) => {
           saveData();
 
           resultText = `🎉 **CHÚC MỪNG CHIẾN THẮNG!!!** Ngựa số **${winningHorse}** đã về đích xuất sắc!\n` +
-                       `💰 Bạn đã đoán chính xác và nhận được: **+${formatMoney(reward)}** (X6 tiền cược)\n` +
+                       `💰 Bạn đã đoán chính xác và nhận được: **+${formatMoney(reward)}** (X3 tiền cược)\n` +
                        `🏦 Số dư hiện tại của bạn: **${formatMoney(newCash)}**`;
         } else {
           resultText = `**THẤT BẠI!!!** Ngựa số **${winningHorse}** mới là con cán đích trước.\n` +
@@ -867,14 +867,14 @@ if (cmd === "stop" || cmd === "chiu") {
     return message.reply(`👑 **BOT ĐÃ GIÀNH CHIẾN THẮNG TUYỆT ĐỐI!**\nTất cả người chơi đều thất bại và không có bất kỳ phần thưởng nào được trao!`);
   }
 
-  // MENU
+// MENU
   if (cmd === "menu") {
     const embed = new EmbedBuilder()
       .setColor("#f5d400")
       .setTitle("🏛️ Các lệnh của WEW")
       .setDescription("Danh sách các lệnh của bot")
       .addFields({
-        name: "💰 Lệnh bình thường",
+        name: "💰 Lệnh bình thường (Trang 1)",
         value:
           "🔹 `wew daily`: nhận phần thưởng mỗi ngày\n" +
           "🔹 `wew tien`: xem số tiền có trong ví\n" +
@@ -886,7 +886,11 @@ if (cmd === "stop" || cmd === "chiu") {
           "🔹 `wew vaytien @user <số tiền>`: yêu cầu vay tiền từ người khác\n" +
           "🔹 `wew trano @user`: trả nợ cho người vay\n" +
           "🔹 `wew checkno`: kiểm tra các khoản nợ của bạn\n" +
-          "🔹 `wew nhapcode <tên code>`: nhập code để nhận tiền\n" +
+          "🔹 `wew nhapcode <tên code>`: nhập code để nhận tiền",
+      })
+      .addFields({
+        name: "💰 Lệnh bình thường (Trang 2)",
+        value:
           "🔹 `wew topdaigia`: xem bảng xếp hạng đại gia trong server\n" +
           "🔹 `wew adminlist`: xem danh sách admin/owner\n" +
           "🔹 `wew muaveso`: mua vé số\n" +
@@ -895,8 +899,8 @@ if (cmd === "stop" || cmd === "chiu") {
           "🔹 `wew start`: Bắt đầu chơi game nối từ (người vs bot)\n" +
           "🔹 `wew stop`: Dừng chơi game nối từ hiện tại\n" +
           "🔹 `wew chiu`: đầu hàng game nối từ\n" +
-          "🔹 `wew sanduangua <số ngựa> <số tiền>`: chơi sàn đua ngựa (chọn số ngựa từ 1-6)" +
-          "🔹 `wew baucua <lựa chọn> <số tiền>`: chơi bầu cua (bau, cua, tom, ca, ga, nai)",
+          "🔹 `wew sanduangua <số ngựa> <số tiền>`: chơi sàn đua ngựa\n" +
+          "🔹 `wew baucua <lựa chọn> <số tiền>`: chơi bầu cua",
       })
       .addFields({
         name: "👑 ADMIN/OWNER",
@@ -911,7 +915,7 @@ if (cmd === "stop" || cmd === "chiu") {
           "🔹 `wew mayman @user <tăng % may mắn>`: tăng số may mắn lên \n" +
           "🔹 `wew unmayman @user`: reset số phần trăm may mắn\n" +
           "🔹 `/goptu <từ>`: góp thêm từ mới vào từ điển nối từ\n" +
-          "🔹 `wew addcode <tên code> <số tiền> <số lần có thể nhập>`: thêm code mới\n",
+          "🔹 `wew addcode <tên code> <tiền> <số lần>`: thêm code mới\n",
       })
       .addFields({
         name: "🛠️ OWNER SERVER",
@@ -920,7 +924,8 @@ if (cmd === "stop" || cmd === "chiu") {
           "🔹 `/setlogschannel <channel>`: set channel log\n",
       })
       .setFooter({ text: "WEW BOT ● MADE BY CAUBEVOTRI" });
-    return message.reply({ embeds: [embed] });
+
+    return message.reply({ embeds: [embed] }).catch(console.error);
   }
 
   // LỆNH QUAY
