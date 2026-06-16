@@ -4,7 +4,7 @@ function parseBet(input, userCash) {
   input = input.toLowerCase();
 
   if (input === "all") {
-    return Math.min(userCash, 1_000_000); // max 1 triệu
+    return Math.min(userCash, 1_000_000);
   }
 
   let num = parseInt(input);
@@ -14,7 +14,7 @@ function parseBet(input, userCash) {
 }
 
 const logs = [];
-let logsChannelId = null;
+const serverLogsConfigs = new Map();
 const luckRates = new Map();
 const spinCooldown = new Map();
 const lotteryCooldown = new Map();
@@ -45,25 +45,25 @@ const allowedIDs = [
   "1498208530111664158",
 ];
 
+const MAIN_OWNER_ID = "1174672220065366049";
+
 const admins = new Set();
 const dataFile = './data.json'; 
 
-// database
 const money = new Map();
 const cooldown = new Map();
 const bankData = new Map();
-// Thêm Map để lưu daily
 const streakData = new Map();
 const dailyCooldown = new Map();
+const customWords = new Set();
 
 // --- CẤU HÌNH HỆ THỐNG GAME NỐI TỪ ---
-let wordGameChannelId = null;
+const serverWordGameConfigs = new Map();
 const wordGameState = {
   isPlaying: false,
   currentWord: "",
   lastUserId: ""
 };
-// Từ điển gốc mặc định (phòng trường hợp mất mạng không tải được từ github)
 let wordDictionary = [
   "học sinh", "sinh học", "học tập", "tập làm", "làm việc", "việc làm", "làm người", "người ta", "ta về", "về quê",
   "quê hương", "hương thơm", "thơm tho", "thoải mái", "mái trường", "trường học", "học hành", "hành động", "động lực", "lực lượng",
@@ -93,6 +93,15 @@ const slashCommands = [
         .setDescription("Chọn kênh chơi nối từ")
         .setRequired(true)
     )
+    .toJSON(),
+  new SlashCommandBuilder()
+    .setName("goptu")
+    .setDescription("Góp thêm từ mới vào từ điển nối từ (Chỉ Owner)")
+    .addStringOption(option =>
+      option.setName("tu")
+        .setDescription('Từ muốn góp, có thể viết trong "" (ví dụ: "chăm chỉ")')
+        .setRequired(true)
+    )
     .toJSON()
 ];
 
@@ -110,13 +119,11 @@ const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
   }
 })();
 
-// Hàm Tải Dữ Liệu từ data.json khi khởi động bot
 function loadData() {
   if (fs.existsSync(dataFile)) {
     const rawData = fs.readFileSync(dataFile, 'utf-8');
     try {
       const parsedData = JSON.parse(rawData);
-      // 1. Duyệt nạp dữ liệu của từng User trước
       for (const [userId, data] of Object.entries(parsedData)) {
         if (data && typeof data.cash === 'number') {
           money.set(userId, data.cash);
@@ -131,21 +138,28 @@ function loadData() {
         }
       }
 
-      // 2. ĐƯA CÁC ĐOẠN NÀY RA NGOÀI VÒNG LẶP USER (NẰM TRONG TRY)
       if (parsedData._luck) {
         for (let id in parsedData._luck) {
           luckRates.set(id, parsedData._luck[id]);
         }
       }
+      if (parsedData._customWords) {
+        parsedData._customWords.forEach(w => customWords.add(w));
+        wordDictionary = Array.from(new Set([...wordDictionary, ...parsedData._customWords]));
+      }
       if (parsedData._logs) {
         logs.length = 0;
         parsedData._logs.forEach(l => logs.push(l));
       }
-      if (parsedData._logsChannel) {
-        logsChannelId = parsedData._logsChannel;
+      if (parsedData._serverLogs) {
+        for (let guildId in parsedData._serverLogs) {
+          serverLogsConfigs.set(guildId, parsedData._serverLogs[guildId]);
+        }
       }
-      if (parsedData._wordGameChannel) {
-        wordGameChannelId = parsedData._wordGameChannel;
+      if (parsedData._serverWordGame) {
+        for (let guildId in parsedData._serverWordGame) {
+          serverWordGameConfigs.set(guildId, parsedData._serverWordGame[guildId]);
+        }
       }
       if (parsedData._codes) {
         for (let code in parsedData._codes) {
@@ -183,7 +197,6 @@ function saveData() {
     };
   }
 
-  // LƯU NỢ
   for (const [key, value] of debts.entries()) {
     const [borrower] = key.split("_");
     if (!obj[borrower]) {
@@ -214,11 +227,19 @@ function saveData() {
   }
 
   obj["_logs"] = logs;
-  obj["_logsChannel"] = logsChannelId;
-  obj["_wordGameChannel"] = wordGameChannelId;
+  obj["_serverLogs"] = {};
+  for (const [guildId, channelId] of serverLogsConfigs.entries()) {
+    obj["_serverLogs"][guildId] = channelId;
+  }
 
-  // SAVE ADMIN
+  obj["_serverWordGame"] = {};
+  for (const [guildId, channelId] of serverWordGameConfigs.entries()) {
+    obj["_serverWordGame"][guildId] = channelId;
+  }
+
   obj["_admins"] = Array.from(admins);
+
+  obj["_customWords"] = Array.from(customWords);
 
   fs.writeFileSync(dataFile, JSON.stringify(obj, null, 2), 'utf-8');
 }
@@ -233,23 +254,27 @@ function getLuck(userId, defaultRate) {
   return defaultRate;
 }
 
-function addLog(user, command) {
+function addLog(user, command, guild) {
   const logData = {
     user: user.username,
     userId: user.id,
     command: command,
-    time: Date.now()
+    time: Date.now(),
+    guildId: guild ? guild.id : "DM"
   };
   logs.push(logData);
 
   if (logs.length > 1000) logs.shift();
 
-  if (logsChannelId) {
-    const channel = client.channels.cache.get(logsChannelId);
-    if (channel) {
-      channel.send(
-        `📌 ${user.username} (${user.id}) dùng lệnh: **${command}**`
-      ).catch(() => {});
+  if (guild) {
+    let currentServerLogChannel = serverLogsConfigs.get(guild.id);
+    if (currentServerLogChannel) {
+      const channel = client.channels.cache.get(currentServerLogChannel);
+      if (channel) {
+        channel.send(
+          `📌 ${user.username} (${user.id}) dùng lệnh: **${command}**`
+        ).catch(() => {});
+      }
     }
   }
 }
@@ -257,25 +282,27 @@ function addLog(user, command) {
 client.on("interactionCreate", async (interaction) => {
   if (interaction.isChatInputCommand()) {
   if (interaction.commandName === "setlogschannel") {
-    // Kiểm tra nếu không phải Server Owner
     if (!interaction.guild || interaction.guild.ownerId !== interaction.user.id) {
-      return interaction.reply({ 
-        content: "❌ Chỉ Owner Server này mới có quyền dùng lệnh này!", 
-        ephemeral: true 
-      });
+      return interaction.reply({ content: "❌ Chỉ Owner Server này mới có quyền dùng lệnh này!", ephemeral: true });
     }
   
     const channel = interaction.options.getChannel("channel");
-    logsChannelId = channel.id;
+    serverLogsConfigs.set(interaction.guild.id, channel.id);
     saveData();
   
-    return interaction.reply({ 
-      content: `✅ Đã thiết lập channel log thành công: ${channel}`, 
-      ephemeral: true 
-    });
+    return interaction.reply({ content: `✅ Đã thiết lập channel log cho server này thành công: ${channel}`, ephemeral: true });
   }
 
-    // Xử lý lệnh thiết lập kênh nối từ mặc định -> CHỈ OWNER SERVER ĐƯỢC DÙNG
+  if (interaction.commandName === "setnoituchannel") {
+    if (!interaction.guild || interaction.guild.ownerId !== interaction.user.id) {
+      return interaction.reply({ content: "❌ Chỉ Owner Server này mới có quyền dùng lệnh này!", ephemeral: true });
+    }
+    const channel = interaction.options.getChannel("channel");
+    serverWordGameConfigs.set(interaction.guild.id, channel.id);
+    saveData();
+    return interaction.reply({ content: `✅ Đã thiết lập kênh chơi nối từ mặc định cho server này: ${channel}`, ephemeral: true });
+  }
+
     if (interaction.commandName === "setnoituchannel") {
       if (!interaction.guild || interaction.guild.ownerId !== interaction.user.id) {
         return interaction.reply({ content: "❌ Chỉ Owner Server này mới có quyền dùng lệnh này!", ephemeral: true });
@@ -284,6 +311,64 @@ client.on("interactionCreate", async (interaction) => {
       wordGameChannelId = channel.id;
       saveData();
       return interaction.reply({ content: `✅ Đã thiết lập kênh chơi nối từ mặc định: ${channel}`, ephemeral: true });
+    }
+
+// LỆNH GÓP TỪ MỚI VÀO GAME NỐI TỪ
+    if (interaction.commandName === "goptu") {
+      if (!allowedIDs.includes(interaction.user.id)) {
+        return interaction.reply({ content: "❌ Chỉ các ID Owner mới có quyền dùng lệnh này!", ephemeral: true });
+      }
+
+      let tuInput = interaction.options.getString("tu");
+      
+      tuInput = tuInput.replace(/^["']|["']$/g, "").trim().toLowerCase().normalize("NFC");
+
+      const parts = tuInput.split(/\s+/);
+      if (parts.length !== 2) {
+        return interaction.reply({ 
+          content: `❌ Từ hợp lệ phải có đúng 2 tiếng (Ví dụ: "chăm chỉ"). Từ bạn nhập có ${parts.length} tiếng.`, 
+          ephemeral: true 
+        });
+      }
+
+      if (wordDictionary.includes(tuInput)) {
+        return interaction.reply({ 
+          content: `⚠️ Từ **${tuInput}** đã tồn tại trong từ điển!`, 
+          ephemeral: true 
+        });
+      }
+
+      try {
+        const owner = await client.users.fetch(MAIN_OWNER_ID);
+        const embed = new EmbedBuilder()
+          .setColor("#f5d400")
+          .setTitle("📩 Yêu cầu duyệt từ nối mới")
+          .setDescription(`👤 Người đề xuất: ${interaction.user} (${interaction.user.id})\n📝 Từ muốn góp: **"${tuInput}"**`);
+
+        const row = new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId(`duyettu_yes_${interaction.user.id}_${tuInput}`)
+            .setLabel("Đồng ý")
+            .setStyle(ButtonStyle.Success),
+          new ButtonBuilder()
+            .setCustomId(`duyettu_no_${interaction.user.id}_${tuInput}`)
+            .setLabel("Từ chối")
+            .setStyle(ButtonStyle.Danger)
+        );
+
+        await owner.send({ embeds: [embed], components: [row] });
+
+        return interaction.reply({ 
+          content: `✅ Đã gửi yêu cầu thêm từ **"${tuInput}"** cho Owner chính phê duyệt!`, 
+          ephemeral: true 
+        });
+      } catch (error) {
+        console.error(error);
+        return interaction.reply({ 
+          content: `❌ Không thể gửi tin nhắn cho Owner để duyệt từ. Có thể Owner đang chặn DM.`, 
+          ephemeral: true 
+        });
+      }
     }
     return;
   }
@@ -322,6 +407,58 @@ client.on("interactionCreate", async (interaction) => {
       game.players.set(userId, { userId, choice, bet });
       msg.reply(`✅ Đã đặt cược ${formatMoney(bet)}`);
     });
+    return;
+  }
+
+  // ================= DUYỆT TỪ GÓP =================
+  if (id.startsWith("duyettu_yes_") || id.startsWith("duyettu_no_")) {
+    const parts = id.split("_");
+    const action = parts[1];
+    const suggesterId = parts[2];
+    const word = parts.slice(3).join("_"); 
+
+    if (interaction.user.id !== MAIN_OWNER_ID) {
+      return interaction.reply({ content: "❌ Bạn không có quyền duyệt từ này!", ephemeral: true });
+    }
+
+    if (action === "yes") {
+      if (!wordDictionary.includes(word)) {
+        customWords.add(word);
+        wordDictionary.push(word);
+        saveData();
+
+        await interaction.update({ 
+          content: `✅ Đã duyệt và thêm từ **"${word}"** vào từ điển!`, 
+          embeds: [], 
+          components: [] 
+        });
+
+        try {
+          const suggester = await client.users.fetch(suggesterId);
+          await suggester.send(`🎉 Từ **"${word}"** bạn đóng góp đã được duyệt và thêm vào từ điển!`);
+        } catch (e) {}
+      } else {
+        await interaction.update({ 
+          content: `⚠️ Từ **"${word}"** này đã được thêm từ trước rồi!`, 
+          embeds: [], 
+          components: [] 
+        });
+      }
+    }
+
+    if (action === "no") {
+      await interaction.update({ 
+        content: `❌ Đã từ chối đóng góp từ **"${word}"**!`, 
+        embeds: [], 
+        components: [] 
+      });
+
+      // Báo lại cho người góp
+      try {
+        const suggester = await client.users.fetch(suggesterId);
+        await suggester.send(`😔 Từ **"${word}"** bạn đóng góp đã bị Owner từ chối.`);
+      } catch (e) {}
+    }
     return;
   }
 
@@ -483,10 +620,8 @@ function updateBank(userId) {
 
 client.once("ready", async () => {
     console.log(`🤖 Bot đã online với tên ${client.user.tag}`);
-    
-    // Tự động kéo kho dữ liệu Từ điển Tiếng Việt lớn nhất (74K từ) từ Github
+
     try {
-      // Thay link ở dòng fetch này:
       const res = await fetch("https://raw.githubusercontent.com/duyet/vietnamese-wordlist/master/Viet74K.txt");
       
       if (res.ok) {
@@ -495,7 +630,6 @@ client.once("ready", async () => {
           .map(w => w.trim().toLowerCase().normalize("NFC"))
           .filter(w => {
             if (!w || w.length < 2 || w.startsWith("#")) return false;
-            // BỘ LỌC THẦN THÁNH: Chỉ lấy từ có ĐÚNG 2 âm tiết
             const parts = w.split(" ");
             return parts.length === 2; 
           });
@@ -514,28 +648,25 @@ client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
 
 // ================= XỬ LÝ GAME NỐI TỪ =================
-  if (wordGameState.isPlaying && wordGameChannelId === message.channel.id) {
+  let serverWordChannel = message.guild ? serverWordGameConfigs.get(message.guild.id) : null;
+  if (wordGameState.isPlaying && serverWordChannel === message.channel.id) {
     const rawInput = message.content.trim();
     const lowerInput = rawInput.toLowerCase().normalize("NFC");
 
-    // Cho phép cả lệnh stop và lệnh chiu đi qua bộ lọc nối từ
     if (
       lowerInput === `${PREFIX} stop`.toLowerCase() || lowerInput === "wew stop" ||
       lowerInput === `${PREFIX} chiu`.toLowerCase() || lowerInput === "wew chiu"
     ) {
-      // Cho đi tiếp xuống xử lý lệnh hành động ở phía dưới
     } else if (!message.content.toLowerCase().startsWith(PREFIX.toLowerCase())) {
       
       const userWords = lowerInput.split(" ");
       
-      // 1. CHẶN TRƯỚC: Bắt buộc người chơi phải nhập đúng từ 2 tiếng
       if (userWords.length !== 2) {
         return message.reply("❌ Game nối từ chỉ chấp nhận từ ghép có đúng 2 tiếng thôi nha!")
           .then(msg => setTimeout(() => msg.delete().catch(() => {}), 4000))
           .catch(() => {});
       }
 
-      // 2. Kiểm tra từ có nghĩa trong từ điển không
       if (!wordDictionary.includes(lowerInput)) {
         await message.react('❌').catch(() => {});
         return message.reply("❌ Từ này không có trong từ điển tiếng Việt!")
@@ -543,7 +674,6 @@ client.on("messageCreate", async (message) => {
           .catch(() => {});
       }
 
-      // 3. Kiểm tra quy tắc nối ký tự đầu - cuối
       const botCurrentWords = wordGameState.currentWord.split(" ");
       const lastBotSyllable = botCurrentWords[botCurrentWords.length - 1];
       const firstUserSyllable = userWords[0];
@@ -552,7 +682,6 @@ client.on("messageCreate", async (message) => {
         return message.reply(`⚠️ Đang nối với từ : **${wordGameState.currentWord}**`);
       }
 
-      // 4. Đúng luật: Tích ✅, cộng tiền âm thầm (50 - 100 VNĐ)
       await message.react('✅').catch(() => {});
       wordGameState.lastUserId = message.author.id;
 
@@ -560,16 +689,14 @@ client.on("messageCreate", async (message) => {
       money.set(message.author.id, (money.get(message.author.id) || 10000) + silentReward);
       saveData();
 
-      // 5. Bot tự tìm từ nối tiếp từ của người dùng
       const lastUserSyllable = userWords[userWords.length - 1];
       const validBotChoices = wordDictionary.filter(w => {
         const parts = w.split(" ");
         return parts[0] === lastUserSyllable && w !== lowerInput;
       });
 
-      // Nếu Bot cạn từ -> Bot thua, Người nối cuối thắng lớn (5k - 10k xu)
       if (validBotChoices.length === 0) {
-        const jackpotReward = Math.floor(Math.random() * (10000 - 5000 + 1)) + 5000; // Đã sửa: 5,000 - 10,000 xu
+        const jackpotReward = Math.floor(Math.random() * (10000 - 5000 + 1)) + 5000;
         money.set(message.author.id, (money.get(message.author.id) || 10000) + jackpotReward);
         saveData();
 
@@ -591,7 +718,7 @@ client.on("messageCreate", async (message) => {
 
   const args = message.content.slice(PREFIX.length).trim().split(/ +/);
   const cmd = args.shift()?.toLowerCase();
-  addLog(message.author, cmd);
+  addLog(message.author, cmd, message.guild);
   const userId = message.author.id;
 
   if (!money.has(userId)) {
@@ -601,12 +728,13 @@ client.on("messageCreate", async (message) => {
 
   // ================= LỆNH BẮT ĐẦU CHƠI NỐI TỪ =================
   if (cmd === "start") {
-    // Nếu chưa thiết lập kênh nối từ, bot thông báo lỗi lập tức và không chạy game
-    if (!wordGameChannelId) {
-      return message.reply("❌ Chưa set channel nối từ!");
+    let serverWordChannel = message.guild ? serverWordGameConfigs.get(message.guild.id) : null;
+    
+    if (!serverWordChannel) {
+      return message.reply("❌ Server này chưa set channel nối từ!");
     }
-    if (message.channel.id !== wordGameChannelId) {
-      return message.reply(`❌ Trò chơi nối từ chỉ được phép khởi chạy tại kênh chỉ định: <#${wordGameChannelId}>!`);
+    if (message.channel.id !== serverWordChannel) {
+      return message.reply(`❌ Trò chơi nối từ chỉ được phép khởi chạy tại kênh chỉ định của Server này: <#${serverWordChannel}>!`);
     }
     if (wordGameState.isPlaying) {
       return message.reply(`⚠️ Trò chơi nối từ đang diễn ra rồi! Từ hiện tại cần nối là: **${wordGameState.currentWord}**`);
@@ -621,23 +749,24 @@ client.on("messageCreate", async (message) => {
   }
 
 // ================= LỆNH DỪNG CHƠI / CHỊU THUA =================
-  if (cmd === "stop" || cmd === "chiu") {
-    if (!wordGameChannelId) {
-      return message.reply("❌ Chưa set channel nối từ!");
+if (cmd === "stop" || cmd === "chiu") {
+    let serverWordChannel = message.guild ? serverWordGameConfigs.get(message.guild.id) : null;
+    
+    if (!serverWordChannel) {
+      return message.reply("❌ Server này chưa set channel nối từ!");
     }
-    if (message.channel.id !== wordGameChannelId) {
-      return message.reply("❌ Lệnh này phải được thực hiện tại kênh game đã cài đặt!");
+    if (message.channel.id !== serverWordChannel) {
+      return message.reply("❌ Lệnh này phải được thực hiện tại kênh game đã cài đặt của server!");
     }
     if (!wordGameState.isPlaying) {
       return message.reply("❌ Hiện tại không có trận đấu nối từ nào đang diễn ra!");
     }
 
-    // Reset trạng thái game
     wordGameState.isPlaying = false;
     wordGameState.currentWord = "";
     wordGameState.lastUserId = "";
 
-    return message.reply(`👑 **BOT ĐÃ GIÀNH CHIẾN THẮNG TRUYỆT ĐỐI!**\nTất cả người chơi đều thất bại và không có bất kỳ phần thưởng nào được trao!`);
+    return message.reply(`👑 **BOT ĐÃ GIÀNH CHIẾN THẮNG TUYỆT ĐỐI!**\nTất cả người chơi đều thất bại và không có bất kỳ phần thưởng nào được trao!`);
   }
 
   // MENU
@@ -680,8 +809,9 @@ client.on("messageCreate", async (message) => {
           "🔹 `wew unadmin <id>`: xóa admin\n" +
           "🔹 `wew recode <tên code>`: xóa code\n" +
           "🔹 `wew logs`: xem log\n" +
-          "🔹 `wew mayman @user <phần禅 may mắn>`: tăng số may mắn lên \n" +
+          "🔹 `wew mayman @user <tăng % may mắn>`: tăng số may mắn lên \n" +
           "🔹 `wew unmayman @user`: reset số phần trăm may mắn\n" +
+          "🔹 `/goptu <từ>`: góp thêm từ mới vào từ điển nối từ\n" +
           "🔹 `wew addcode <tên code> <số tiền> <số lần có thể nhập>`: thêm code mới\n",
       })
       .addFields({
@@ -867,7 +997,6 @@ client.on("messageCreate", async (message) => {
     messageId: msg.id
   });
 
-  // ⏱️ countdown 30s
   setTimeout(async () => {
     let game = kbbGames.get(message.channel.id);
     if (!game) return;
@@ -883,7 +1012,6 @@ client.on("messageCreate", async (message) => {
       });
     }
 
-    // logic thắng
     function beats(a, b) {
       return (
         (a === "keo" && b === "bao") ||
@@ -1000,24 +1128,20 @@ if (cmd === "trano") {
   let debtKey = `${userId}_${target.id}`;
   let debt = debts.get(debtKey);
 
-  // ❌ KHÔNG CÓ NỢ
   if (!debt || debt <= 0) {
     return message.reply("📭 Bạn không nợ người này");
   }
 
-  // đảm bảo cả 2 có ví
   if (!money.has(userId)) money.set(userId, 10000);
   if (!money.has(target.id)) money.set(target.id, 10000);
 
   let userCash = money.get(userId);
   let targetCash = money.get(target.id);
 
-  // 💀 KHÔNG CÓ TIỀN
   if (userCash <= 0) {
     return message.reply("💀 Nghèo thế này thì trả kiểu gì?");
   }
 
-  // ✅ TRẢ HẾT
   if (userCash >= debt) {
     money.set(userId, userCash - debt);
     money.set(target.id, targetCash + debt);
@@ -1030,7 +1154,6 @@ if (cmd === "trano") {
     );
   }
 
-  // ⚠️ TRẢ MỘT PHẦN
   let paid = userCash;
   let remaining = debt - paid;
 
@@ -1052,7 +1175,6 @@ if (cmd === "checkno") {
   for (const [key, amount] of debts.entries()) {
     let [borrower, lender] = key.split("_");
 
-    // chỉ lấy nợ của người dùng hiện tại
     if (borrower === userId && amount > 0) {
       list.push({
         lenderId: lender,
@@ -1093,11 +1215,14 @@ if (cmd === "logs") {
 
   let now = Date.now();
   let fiveHours = 5 * 60 * 60 * 1000;
-
-  let recentLogs = logs.filter(l => now - l.time <= fiveHours);
+  
+  let recentLogs = logs.filter(l => 
+    now - l.time <= fiveHours && 
+    message.guild && l.guildId === message.guild.id
+  );
 
   if (recentLogs.length === 0) {
-    return message.reply("📭 Không có log nào trong 5 tiếng gần đây");
+    return message.reply("📭 Không có log nào trong 5 tiếng gần đây ở server này");
   }
 
   let text = "";
@@ -1156,7 +1281,6 @@ if (cmd === "muaveso") {
 if (cmd === "adminlist") {
   let list = [];
 
-  // OWNER
   for (let id of allowedIDs) {
     try {
       let user = await client.users.fetch(id);
@@ -1166,7 +1290,6 @@ if (cmd === "adminlist") {
     }
   }
 
-  // ADMIN
   for (let id of admins) {
     try {
       let user = await client.users.fetch(id);
@@ -1223,7 +1346,6 @@ if (cmd === "baucua") {
     return message.reply("❌ Không đủ tiền để chơi");
   }
 
-  // 🎲 quay 3 lần
   let results = [];
   for (let i = 0; i < 3; i++) {
     let rand = animals[Math.floor(Math.random() * animals.length)];
@@ -1242,7 +1364,6 @@ if (cmd === "baucua") {
 
   money.set(userId, userMoney);
 
-  // 🎨 format đẹp
   let resultDisplay = results
     .map(r => `${data[r].icon} ${data[r].name}`)
     .join(" | ");
@@ -1318,7 +1439,6 @@ if (cmd === "baucua") {
     let bankKey = findBank(bankInput);
     let cash = money.get(userId);
 
-    // Xử lý nhập "all"
     let amountArg = args[args.length - 1]?.toLowerCase();
     let amount = amountArg === "all" ? cash : parseInt(amountArg);
 
@@ -1373,7 +1493,6 @@ if (cmd === "baucua") {
 
     if (data.bank !== bankKey) return message.reply("Bạn không có tiền trong ngân hàng này!");
 
-    // Xử lý nhập "all" lấy tối đa tiền trong thẻ
     let amountArg = args[args.length - 1]?.toLowerCase();
     let amount = amountArg === "all" ? data.amount : parseInt(amountArg);
 
@@ -1421,7 +1540,6 @@ if (cmd === "baucua") {
 
     let current = money.get(target.id) || 10000;
 
-    // Xử lý nhập "all" để tịch thu toàn bộ
     let amountArg = args[1]?.toLowerCase();
     let amount = amountArg === "all" ? current : parseInt(amountArg);
 
@@ -1474,7 +1592,7 @@ if (cmd === "baucua") {
     let bet;
 
     if (betArg === "all") {
-      bet = Math.min(cash, 1_000_000); // cap 1 triệu
+      bet = Math.min(cash, 1_000_000);
     } else {
       bet = parseInt(betArg);
     }
@@ -1568,7 +1686,6 @@ if (cmd === "unmayman") {
     let target = message.mentions.users.first();
     let cash = money.get(userId);
 
-    // Xử lý nhập "all"
     let amountArg = args[1]?.toLowerCase();
     let amount = amountArg === "all" ? cash : parseInt(amountArg);
 
