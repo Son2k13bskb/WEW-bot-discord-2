@@ -778,7 +778,7 @@ client.on("messageCreate", async (message) => {
         let resultText = "";
 
         if (isWin) {
-          let reward = bet * 2;
+          let reward = bet * 3;
           let newCash = (money.get(userId) || 0) + reward;
           money.set(userId, newCash);
           saveData();
@@ -895,6 +895,7 @@ if (cmd === "stop" || cmd === "chiu") {
           "🔹 `wew start`: Bắt đầu chơi game nối từ (người vs bot)\n" +
           "🔹 `wew stop`: Dừng chơi game nối từ hiện tại\n" +
           "🔹 `wew chiu`: đầu hàng game nối từ\n" +
+          "🔹 `wew sanduangua <số ngựa> <số tiền>`: chơi sàn đua ngựa (chọn số ngựa từ 1-6)" +
           "🔹 `wew baucua <lựa chọn> <số tiền>`: chơi bầu cua (bau, cua, tom, ca, ga, nai)",
       })
       .addFields({
