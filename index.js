@@ -1,3 +1,7 @@
+const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder } = require('discord.js');
+
+const BACKUP_CHANNEL_ID = "1517914977992708138";
+
 function parseBet(input, userCash) {
   if (!input) return null;
 
@@ -28,6 +32,27 @@ const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
 
 function formatMoney(num) {
   return Math.floor(num).toLocaleString("vi-VN") + " VNĐ";
+}
+
+async function findGlobalUser(client, input) {
+    if (!input) return null;
+    
+    const cleanInput = input.replace(/[<@!>]/g, '');
+
+    if (/^\d+$/.test(cleanInput)) {
+        try {
+            const user = await client.users.fetch(cleanInput);
+            if (user) return user;
+        } catch (err) {
+        }
+    }
+
+    const userByName = client.users.cache.find(
+        u => u.username.toLowerCase() === input.toLowerCase() || 
+             (u.globalName && u.globalName.toLowerCase() === input.toLowerCase())
+    );
+    
+    return userByName || null;
 }
 
 const client = new Client({
@@ -119,17 +144,35 @@ const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
   }
 })();
 
-function loadData() {
+async function loadData() {
+  try {
+    const channel = await client.channels.fetch(BACKUP_CHANNEL_ID);
+    if (channel) {
+      const messages = await channel.messages.fetch({ limit: 1 });
+      const lastMsg = messages.first();
+      
+      if (lastMsg && lastMsg.attachments.size > 0) {
+        const attachment = lastMsg.attachments.first();
+        const response = await fetch(attachment.url);
+        const dataText = await response.text();
+        fs.writeFileSync(dataFile, dataText, 'utf-8');
+        console.log("📥 Đã khôi phục dữ liệu thành công từ Discord Backup!");
+      }
+    }
+  } catch (err) {
+    console.log("⚠️ Không thể tải backup từ Discord, sẽ đọc file local hiện có.");
+  }
+
   if (fs.existsSync(dataFile)) {
     const rawData = fs.readFileSync(dataFile, 'utf-8');
     try {
       const parsedData = JSON.parse(rawData);
+      
       for (const [userId, data] of Object.entries(parsedData)) {
         if (data && typeof data.cash === 'number') {
           money.set(userId, data.cash);
           streakData.set(userId, data.streak || 0);
           dailyCooldown.set(userId, data.nextDaily || 0);
-          
           if (data.debts) {
             for (let key in data.debts) {
               debts.set(key, data.debts[key]);
@@ -139,9 +182,7 @@ function loadData() {
       }
 
       if (parsedData._luck) {
-        for (let id in parsedData._luck) {
-          luckRates.set(id, parsedData._luck[id]);
-        }
+        for (let id in parsedData._luck) { luckRates.set(id, parsedData._luck[id]); }
       }
       if (parsedData._customWords) {
         parsedData._customWords.forEach(w => customWords.add(w));
@@ -152,30 +193,22 @@ function loadData() {
         parsedData._logs.forEach(l => logs.push(l));
       }
       if (parsedData._serverLogs) {
-        for (let guildId in parsedData._serverLogs) {
-          serverLogsConfigs.set(guildId, parsedData._serverLogs[guildId]);
-        }
+        for (let guildId in parsedData._serverLogs) { serverLogsConfigs.set(guildId, parsedData._serverLogs[guildId]); }
       }
       if (parsedData._serverWordGame) {
-        for (let guildId in parsedData._serverWordGame) {
-          serverWordGameConfigs.set(guildId, parsedData._serverWordGame[guildId]);
-        }
+        for (let guildId in parsedData._serverWordGame) { serverWordGameConfigs.set(guildId, parsedData._serverWordGame[guildId]); }
       }
       if (parsedData._codes) {
-        for (let code in parsedData._codes) {
-          codes.set(code, parsedData._codes[code]);
-        }
+        for (let code in parsedData._codes) { codes.set(code, parsedData._codes[code]); }
       }
       if (parsedData._usedCodes) {
-        for (let userId in parsedData._usedCodes) {
-          usedCodes.set(userId, parsedData._usedCodes[userId]);
-        }
+        for (let userId in parsedData._usedCodes) { usedCodes.set(userId, parsedData._usedCodes[userId]); }
       }
       if (parsedData._admins) {
         parsedData._admins.forEach(id => admins.add(id));
       }
 
-      console.log("✅ Đã tải thành công dữ liệu từ data.json!");
+      console.log("✅ Đã nạp thành công dữ liệu vào bộ nhớ!");
     } catch (err) {
       console.log("❌ Lỗi khi đọc file data.json, kiểm tra lại cú pháp JSON!");
     }
@@ -618,8 +651,32 @@ function updateBank(userId) {
   }
 }
 
-client.once("ready", async () => {
+client.once("ready", async () => { 
     console.log(`🤖 Bot đã online với tên ${client.user.tag}`);
+
+    await loadData();
+
+    setInterval(saveData, 30 * 1000);
+
+    setInterval(async () => {
+      if (!fs.existsSync(dataFile)) return; 
+      
+      try {
+        const channel = client.channels.cache.get(BACKUP_CHANNEL_ID); 
+        
+        if (channel) {
+          const file = new AttachmentBuilder(dataFile); 
+          
+          await channel.send({ 
+            content: `📦 Backup Data - ${new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}`, 
+            files: [file] 
+          });
+          console.log("📤 Đã gửi file backup lên Discord thành công!");
+        }
+      } catch (e) {
+        console.log("❌ Lỗi khi gửi backup lên Discord", e); 
+      }
+    }, 10 * 60 * 1000);
 
     try {
       const res = await fetch("https://raw.githubusercontent.com/duyet/vietnamese-wordlist/master/Viet74K.txt");
@@ -1186,11 +1243,12 @@ if (cmd === "stop" || cmd === "chiu") {
 }
 
 // LỆNH VAY TIỀN
-if (cmd === "vaytien") {
-  let target = message.mentions.users.first();
+// LỆNH VAY TIỀN
+  if (cmd === "vaytien") {
+  let target = await findGlobalUser(client, args[0]);
   let amount = parseInt(args[1]);
 
-  if (!target) return message.reply("⚠️ Thiếu người cho vay!");
+  if (!target) return message.reply("Tên người dùng sai hoặc không hợp lệ");
   if (target.id === userId) return message.reply("Tự vay luôn đi cho nhanh 😐");
   if (isNaN(amount) || amount <= 0) return message.reply("Số tiền không hợp lệ!");
 
@@ -1225,9 +1283,9 @@ if (cmd === "vaytien") {
 
 // LỆNH TRẢ NỢ
 if (cmd === "trano") {
-  let target = message.mentions.users.first();
+  let target = await findGlobalUser(client, args[0]);
 
-  if (!target) return message.reply("⚠️ Thiếu người cần trả nợ!");
+  if (!target) return message.reply("Tên người dùng sai hoặc không hợp lệ");
 
   let debtKey = `${userId}_${target.id}`;
   let debt = debts.get(debtKey);
@@ -1617,14 +1675,13 @@ if (cmd === "baucua") {
     message.reply(`**ĐÃ RÚT THÀNH CÔNG:** Bạn đã rút **${formatMoney(amount)}** khỏi ngân hàng **${banks[bankKey].name}**`);
   }
 
-  // ADD TIEN
+// ADD TIEN
   if (cmd === "addtien" || cmd === "add") {
     if (!isAdmin(userId)) return message.reply("❌ Bạn không có quyền sử dụng lệnh này!");
-
-    let target = message.mentions.users.first();
+    let target = await findGlobalUser(client, args[0]);
     let amount = parseInt(args[1]);
 
-    if (!target) return message.reply("⚠️ Thiếu người cần add!");
+    if (!target) return message.reply("Tên người dùng sai hoặc không hợp lệ");
     if (isNaN(amount) || amount <= 0) return message.reply("Số tiền không hợp lệ!");
     if (!money.has(target.id)) money.set(target.id, 10000);
 
@@ -1637,10 +1694,9 @@ if (cmd === "baucua") {
 // THU TIEN
   if (cmd === "thutien" || cmd === "thu") {
     if (!isAdmin(userId)) return message.reply("❌ Bạn không có quyền sử dụng lệnh này!");
-
-    let target = message.mentions.users.first();
+    let target = await findGlobalUser(client, args[0]);
     
-    if (!target) return message.reply("⚠️ Thiếu người cần thu!");
+    if (!target) return message.reply("Tên người dùng sai hoặc không hợp lệ");
 
     let current = money.get(target.id) || 10000;
 
@@ -1656,16 +1712,16 @@ if (cmd === "baucua") {
     message.reply(`Đã thu **${formatMoney(amount)}** từ ${target}`);
   }
   
-  // CHECK TIỀN NGƯỜI KHÁC
+// CHECK TIỀN NGƯỜI KHÁC
   if (cmd === "checktien") {
     if (!isAdmin(userId)) {
       return message.reply("❌ Bạn không có quyền sử dụng lệnh này!");
     }
 
-    let target = message.mentions.users.first();
+    let target = await findGlobalUser(client, args[0]);
 
     if (!target) {
-      return message.reply("⚠️ Thiếu tên người cần check!");
+      return message.reply("Tên người dùng sai hoặc không hợp lệ");
     }
 
     let targetCash = money.get(target.id);
@@ -1745,10 +1801,10 @@ if (cmd === "baucua") {
     return message.reply("❌ Chỉ owner dùng được");
   }
 
-  let target = message.mentions.users.first();
+  let target = await findGlobalUser(client, args[0]);
   let percent = parseInt(args[1]);
 
-  if (!target) return message.reply("⚠️ Thiếu người!");
+  if (!target) return message.reply("Tên người dùng sai hoặc không hợp lệ");
   if (isNaN(percent) || percent < 0 || percent > 100) {
     return message.reply("⚠️ % chỉ từ 0 → 100");
   }
@@ -1757,8 +1813,8 @@ if (cmd === "baucua") {
   saveData();
 
   return message.reply(
-    `🍀 Đã set may mắn của ${target} = **${percent}%**\n` +
-    "Giờ nó đánh đâu thắng đó, hẹ hẹ"
+    `Đã set may mắn của ${target} = **${percent}%**\n` +
+    "Giờ bro đã được buff độ đen của mình lên rồi"
   );
 }
 
@@ -1768,9 +1824,9 @@ if (cmd === "unmayman") {
     return message.reply("❌ Chỉ owner dùng được");
   }
 
-  let target = message.mentions.users.first();
+  let target = await findGlobalUser(client, args[0]);
 
-  if (!target) return message.reply("⚠️ Thiếu người!");
+  if (!target) return message.reply("Tên người dùng sai hoặc không hợp lệ");
 
   if (!luckRates.has(target.id)) {
     return message.reply("Nó không buff nên không gỡ được");
@@ -1787,13 +1843,12 @@ if (cmd === "unmayman") {
 
 // GIVE
   if (cmd === "givetien" || cmd === "give") {
-    let target = message.mentions.users.first();
+    let target = await findGlobalUser(client, args[0]);
     let cash = money.get(userId);
 
     let amountArg = args[1]?.toLowerCase();
     let amount = amountArg === "all" ? cash : parseInt(amountArg);
-
-    if (!target) return message.reply("⚠️ Thiếu tên người cần chuyển!");
+    if (!target) return message.reply("Tên người dùng sai hoặc không hợp lệ");
     if (target.id === userId) return message.reply("Không thể chuyển cho chính bản thân!");
     if (isNaN(amount) || amount <= 0) return message.reply("Số tiền không hợp lệ!");
 
