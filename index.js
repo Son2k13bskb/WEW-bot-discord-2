@@ -674,7 +674,7 @@ client.once("ready", async () => {
       } catch (e) {
         console.log("❌ Lỗi khi gửi backup lên Discord", e); 
       }
-    }, 10 * 60 * 1000);
+    }, 5 * 60 * 1000);
 
     try {
       const res = await fetch("https://raw.githubusercontent.com/duyet/vietnamese-wordlist/master/Viet74K.txt");
