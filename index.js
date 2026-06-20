@@ -26,9 +26,7 @@ const kbbGames = new Map();
 const codes = new Map(); 
 const usedCodes = new Map(); 
 const debts = new Map();
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const fs = require('fs');
-const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
 
 function formatMoney(num) {
   return Math.floor(num).toLocaleString("vi-VN") + " VNĐ";
