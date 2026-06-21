@@ -621,7 +621,8 @@ client.on("interactionCreate", async (interaction) => {
 const banks = {
   "vpbank": { name: "VP Bank", aliases: ["vpbank", "vp bank", "vp"], interest: 0.07, duration: 3 * 24 * 60 * 60 * 1000 },
   "vietcombank": { name: "VietComBank", aliases: ["vietcombank", "vietcom bank", "vcb", "vietcom"], interest: 0.05, duration: 2 * 24 * 60 * 60 * 1000 },
-  "dkbank": { name: "DK Bank", aliases: ["dkbank", "dk bank", "dk"], interest: 0.1, duration: 4 * 24 * 60 * 60 * 1000 }
+  "dkbank": { name: "DK Bank", aliases: ["dkbank", "dk bank", "dk"], interest: 0.1, duration: 4 * 24 * 60 * 60 * 1000 },
+  "hrbank": { name: "HR Bank", aliases: ["hrbank", "hr bank", "hr"], interest: 0.08, duration: 3.5 * 24 * 60 * 60 * 1000 }
 };
 
 function findBank(input) {
