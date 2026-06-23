@@ -1904,7 +1904,7 @@ if (cmd === "maydanhbac") {
 
   const embed = new EmbedBuilder()
     .setTitle("🎰 Máy đánh bạc 🎰")
-    .setDescription("Giá mỗi lần quay: **200,000 VNĐ**\n\n| 🍒 || 🔔 || 🎰 |\n\n*Nhấn nút để thử vận may!*")
+    .setDescription("Giá mỗi lần quay: **200,000 VNĐ**\n\n| 🍒 | 🔔 | 🎰 |\n\n*Nhấn nút để thử vận may!*")
     .setColor("#FFD700");
 
   const row = new ActionRowBuilder().addComponents(
