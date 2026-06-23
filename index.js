@@ -21,6 +21,7 @@ const logs = [];
 const serverLogsConfigs = new Map();
 const luckRates = new Map();
 const spinCooldown = new Map();
+const mayDanhBacCooldown = new Map();
 const lotteryCooldown = new Map();
 const kbbGames = new Map();
 const codes = new Map(); 
@@ -1838,6 +1839,165 @@ if (cmd === "unmayman") {
     `🧹 Đã reset may mắn của ${target}\n` +
     "Quay lại kiếp đen như chó, hẹ hẹ"
   );
+}
+
+// LỆNH MÁY ĐÁNH BẠC
+if (cmd === "maydanhbac") {
+  const SPIN_COST = 200000;
+  const COOLDOWN_TIME = 30000; 
+
+  const symbolWeights = [
+    { symbol: "🍒", weight: 350 },       // 35%
+    { symbol: "🍋", weight: 250 },       // 25%
+    { symbol: "🍊", weight: 180 },       // 18%
+    { symbol: "🍇", weight: 180 },       // 18%
+    { symbol: "🍉", weight: 100 },       // 10%
+    { symbol: "🔔", weight: 60 },        // 6%
+    { symbol: "💎", weight: 4 },        // 0.4%
+    { symbol: ":BARdon:1519008641011814540", weight: 35 },  // 3.5%
+    { symbol: ":BARdoi:1519008692836761691", weight: 20 },  // 2%
+    { symbol: ":BARba:1519008724948090951", weight: 10 },   // 1%
+    { symbol: ":jackpot:1519008775082610910", weight: 1 }  // 0.1% 
+  ];
+
+  function getRandomSymbol() {
+    let totalWeight = symbolWeights.reduce((acc, curr) => acc + curr.weight, 0);
+    let randomNum = Math.floor(Math.random() * totalWeight);
+    let weightSum = 0;
+    for (let item of symbolWeights) {
+      weightSum += item.weight;
+      if (randomNum < weightSum) {
+        return item.symbol;
+      }
+    }
+    return "🍒"; 
+  }
+
+  const payouts = {
+    ":jackpot:1519008775082610910": { 3: 100,},
+    ":BARba:1519008724948090951": { 3: 50 },
+    ":BARdoi:1519008692836761691": { 3: 30 },
+    ":BARdon:1519008641011814540": { 3: 20 },
+    "💎": { 3: 80 },
+    "🔔": { 3: 15 },
+    "🍉": { 3: 10 },
+    "🍇": { 3: 5 },
+    "🍊": { 3: 5 },
+    "🍋": { 3: 3 },
+    "🍒": { 3: 2, 2: 1 }
+  };
+
+  const embed = new EmbedBuilder()
+    .setTitle("🎰 Máy đánh bạc 🎰")
+    .setDescription("Giá mỗi lần quay: **200,000 VNĐ**\n\n| 🍒 || 🔔 || 🎰 |\n\n*Nhấn nút để thử vận may!*")
+    .setColor("#FFD700");
+
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId("spin_btn")
+      .setLabel("Quay")
+      .setEmoji("🎰")
+      .setStyle(ButtonStyle.Success),
+    new ButtonBuilder()
+      .setCustomId("cancel_btn")
+      .setLabel("Hủy")
+      .setStyle(ButtonStyle.Danger)
+  );
+
+  const slotMsg = await message.reply({ embeds: [embed], components: [row] });
+
+  const filter = i => i.user.id === userId;
+  const collector = slotMsg.createMessageComponentCollector({ filter, time: 300000 }); // Tồn tại 5 phút
+
+  collector.on('collect', async i => {
+    if (i.customId === "cancel_btn") {
+      const cancelEmbed = new EmbedBuilder()
+        .setTitle("🎰 Máy đánh bạc 🎰")
+        .setDescription("Đã hủy chơi.")
+        .setColor("#FF0000");
+      
+      row.components.forEach(c => c.setDisabled(true)); // Vô hiệu hoá nút
+      await i.update({ embeds: [cancelEmbed], components: [row] });
+      collector.stop();
+      return;
+    }
+
+    if (i.customId === "spin_btn") {
+      const lastSpin = mayDanhBacCooldown.get(userId) || 0;
+      const now = Date.now();
+      if (now - lastSpin < COOLDOWN_TIME) {
+        const timeLeft = Math.ceil((COOLDOWN_TIME - (now - lastSpin)) / 1000);
+        return i.reply({ content: `⏱️ Chờ đã! Bạn cần đợi **${timeLeft} giây** nữa để quay tiếp.`, ephemeral: true });
+      }
+
+      let cash = money.get(userId) || 0;
+      if (cash < SPIN_COST) {
+        return i.reply({ content: `❌ Bạn không đủ tiền! Cần ít nhất **200,000 VNĐ** để quay.`, ephemeral: true });
+      }
+
+      mayDanhBacCooldown.set(userId, now);
+      money.set(userId, cash - SPIN_COST);
+
+      const result = [
+        getRandomSymbol(),
+        getRandomSymbol(),
+        getRandomSymbol()
+      ];
+
+      let winAmount = 0;
+      let multiplier = 0;
+      let isWin = false;
+
+      const counts = {};
+      result.forEach(s => counts[s] = (counts[s] || 0) + 1);
+
+      for (const [symbol, count] of Object.entries(counts)) {
+        if (payouts[symbol] && payouts[symbol][count]) {
+          let currentMult = payouts[symbol][count];
+          if (currentMult > multiplier) {
+            multiplier = currentMult;
+          }
+        }
+      }
+
+      if (multiplier > 0) {
+        isWin = true;
+        winAmount = SPIN_COST * multiplier;
+        cash = money.get(userId);
+        money.set(userId, cash + winAmount);
+      }
+      
+      saveData();
+
+      const formattedResult = result.map(res => {
+        if (res.includes(":") && !res.startsWith("<")) {
+          return `<${res}>`;
+        }
+        return res;
+      });
+
+      const resultString = `| ${result[0]} || ${result[1]} || ${result[2]} |`;
+      let descString = `Giá mỗi lần quay: **200,000 VNĐ**\n\n${resultString}\n\n`;
+      
+      if (isWin) {
+        descString += `🎉 **TRÚNG RỒI!** Bạn nhận được **${formatMoney(winAmount)}** (x${multiplier})`;
+      } else {
+        descString += `😢 **Xịt rồi!** Chúc bạn may mắn lần sau.`;
+      }
+
+      const resultEmbed = new EmbedBuilder()
+        .setTitle("🎰 Máy đánh bạc 🎰")
+        .setDescription(descString)
+        .setColor(isWin ? "#00FF00" : "#FF0000");
+
+      await i.update({ embeds: [resultEmbed], components: [row] });
+    }
+  });
+
+  collector.on('end', async collected => {
+    row.components.forEach(c => c.setDisabled(true));
+    await slotMsg.edit({ components: [row] }).catch(() => {});
+  });
 }
 
 // GIVE
