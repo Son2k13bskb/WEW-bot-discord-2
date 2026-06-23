@@ -1993,7 +1993,7 @@ if (cmd === "maydanhbac") {
         return res;
       });
 
-      const resultString = `| ${result[0]} || ${result[1]} || ${result[2]} |`;
+      const resultString = `| ${result[0]} | ${result[1]} | ${result[2]} |`;
       let descString = `Giá mỗi lần quay: **200,000 VNĐ**\n\n${resultString}\n\n`;
       
       if (isWin) {
