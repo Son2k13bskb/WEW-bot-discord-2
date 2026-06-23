@@ -972,10 +972,11 @@ if (cmd === "stop" || cmd === "chiu") {
           "🔹 `wew stop`: Dừng chơi game nối từ hiện tại\n" +
           "🔹 `wew chiu`: đầu hàng game nối từ\n" +
           "🔹 `wew sanduangua <số ngựa> <số tiền>`: chơi sàn đua ngựa\n" +
-          "🔹 `wew baucua <lựa chọn> <số tiền>`: chơi bầu cua",
+          "🔹 `wew baucua <lựa chọn> <số tiền>`: chơi bầu cua\n" +
+          "🔹 `wew maydanhbac`: chơi máy đánh bạc",
       })
       .addFields({
-        name: "👑 ADMIN/OWNER",
+        name: "👑 ADMIN/OWNER BOT",
         value:
           "🔹 `wew addtien <tên người> <số tiền>`: thêm tiền cho người khác\n" +
           "🔹 `wew thutien <tên người> <số tiền>`: thu tiền từ người khác\n"+
