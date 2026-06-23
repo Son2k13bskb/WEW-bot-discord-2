@@ -177,6 +177,9 @@ async function loadData() {
               debts.set(key, data.debts[key]);
             }
           }
+          if (data.bankData) {
+            bankData.set(userId, data.bankData);
+          }
         }
       }
 
@@ -241,6 +244,18 @@ function saveData() {
     }
 
     obj[borrower].debts[key] = value;
+  }
+
+  for (const [userId, data] of bankData.entries()) {
+    if (!obj[userId]) {
+      obj[userId] = {
+        cash: 10000,
+        streak: 0,
+        nextDaily: 0,
+        debts: {}
+      };
+    }
+    obj[userId].bankData = data;
   }
 
   obj["_codes"] = {};
@@ -1894,12 +1909,12 @@ if (cmd === "maydanhbac") {
 
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-      .setCustomId("spin_btn")
+      .setCustomId("mdb_spin_btn")
       .setLabel("Quay")
       .setEmoji("🎰")
       .setStyle(ButtonStyle.Success),
     new ButtonBuilder()
-      .setCustomId("cancel_btn")
+      .setCustomId("mdb_cancel_btn")
       .setLabel("Hủy")
       .setStyle(ButtonStyle.Danger)
   );
@@ -1910,7 +1925,7 @@ if (cmd === "maydanhbac") {
   const collector = slotMsg.createMessageComponentCollector({ filter, time: 300000 }); // Tồn tại 5 phút
 
   collector.on('collect', async i => {
-    if (i.customId === "cancel_btn") {
+    if (i.customId === "mdb_cancel_btn") {
       const cancelEmbed = new EmbedBuilder()
         .setTitle("🎰 Máy đánh bạc 🎰")
         .setDescription("Đã hủy chơi.")
@@ -1918,11 +1933,12 @@ if (cmd === "maydanhbac") {
       
       row.components.forEach(c => c.setDisabled(true)); // Vô hiệu hoá nút
       await i.update({ embeds: [cancelEmbed], components: [row] });
+   
       collector.stop();
       return;
     }
 
-    if (i.customId === "spin_btn") {
+    if (i.customId === "mdb_spin_btn") { 
       const lastSpin = mayDanhBacCooldown.get(userId) || 0;
       const now = Date.now();
       if (now - lastSpin < COOLDOWN_TIME) {
