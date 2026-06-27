@@ -114,7 +114,7 @@ const slashCommands = [
     .toJSON(),
   new SlashCommandBuilder()
     .setName("taixiu")
-    .setDescription("🎲 Chơi Tài Xỉu Neko - Đặt cược và chờ kết quả")
+    .setDescription("🎲 Chơi Tài Xỉu WEW - Đặt cược và chờ kết quả")
     .toJSON(),
   new SlashCommandBuilder()
     .setName("setnoituchannel")
