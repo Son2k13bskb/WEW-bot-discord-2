@@ -428,7 +428,7 @@ client.on("interactionCreate", async (interaction) => {
       return interaction.reply({ content: `✅ Đã thiết lập kênh chơi nối từ mặc định: ${channel}`, ephemeral: true });
     }
 
-// ====================== TÀI XIU (ĐÃ FIX) ======================
+// ====================== TÀI XIU (ĐÃ FIX COMPONENT) ======================
 if (interaction.commandName === "taixiu") {
   const channelId = interaction.channel.id;
   if (activeTaiXiu.has(channelId)) {
@@ -449,19 +449,25 @@ if (interaction.commandName === "taixiu") {
     new ButtonBuilder().setCustomId(`tx_le_${gameId}`).setLabel("Lẻ").setStyle(ButtonStyle.Primary)
   );
 
-  // Chỉ 2 row số (12 nút + 6 nút sau)
-  const row2 = new ActionRowBuilder();
-  const row3 = new ActionRowBuilder();
-  for (let num = 3; num <= 14; num++) {
-    row2.addComponents(new ButtonBuilder().setCustomId(`tx_num_${num}_${gameId}`).setLabel(num.toString()).setStyle(ButtonStyle.Secondary));
-  }
-  for (let num = 15; num <= 18; num++) {
-    row3.addComponents(new ButtonBuilder().setCustomId(`tx_num_${num}_${gameId}`).setLabel(num.toString()).setStyle(ButtonStyle.Secondary));
+  // Tạo nút số với max 5 nút/row
+  const numberRows = [];
+  let currentRow = new ActionRowBuilder();
+  for (let num = 3; num <= 18; num++) {
+    currentRow.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`tx_num_${num}_${gameId}`)
+        .setLabel(num.toString())
+        .setStyle(ButtonStyle.Secondary)
+    );
+    if (currentRow.components.length === 5 || num === 18) {
+      numberRows.push(currentRow);
+      currentRow = new ActionRowBuilder();
+    }
   }
 
   const msg = await interaction.reply({ 
     embeds: [embed], 
-    components: [row1, row2, row3] 
+    components: [row1, ...numberRows] 
   });
 
   activeTaiXiu.set(channelId, {
