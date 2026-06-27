@@ -14,9 +14,13 @@ function parseBet(input, userCash) {
   let num = parseInt(input);
   if (isNaN(num) || num <= 0) return null;
 
+  return Math.min(num, 1_000_000);
+
   return num;
+  
 }
 
+const activeTaiXiu = new Map();
 const pendingLixi = new Map();
 const activeLixi = new Map();
 const logs = [];
@@ -110,6 +114,10 @@ const slashCommands = [
         .setDescription("Chọn channel log")
         .setRequired(true)
     )
+    .toJSON(),
+  new SlashCommandBuilder()
+    .setName("taixiu")
+    .setDescription("🎲 Chơi Tài Xỉu Neko - Đặt cược và chờ kết quả")
     .toJSON(),
   new SlashCommandBuilder()
     .setName("setnoituchannel")
@@ -423,6 +431,80 @@ client.on("interactionCreate", async (interaction) => {
       return interaction.reply({ content: `✅ Đã thiết lập kênh chơi nối từ mặc định: ${channel}`, ephemeral: true });
     }
 
+    // ====================== TÀI XIU ======================
+if (interaction.commandName === "taixiu") {
+  const channelId = interaction.channel.id;
+
+  if (activeTaiXiu.has(channelId)) {
+    return interaction.reply({ content: "❌ Đang có ván Tài Xỉu khác trong kênh này!", ephemeral: true });
+  }
+
+  const gameId = Date.now().toString();
+  const endTime = Date.now() + 45 * 1000;
+
+  const embed = new EmbedBuilder()
+    .setTitle("🎲 Tài Xỉu WEW - Nhà cái đến từ Châu Chấu!")
+    .setDescription(
+      "Chọn **Tài (11-18)**, **Xỉu (3-10)**, **Chẵn/Lẻ** hoặc **Số cụ thể (3-18)**\n" +
+      "Sau khi chọn, nhập số **Tiền** muốn cược\n\n" +
+      "⏳ **Trò chơi sẽ bắt đầu ngay và đếm ngược 45 giây**"
+    )
+    .setColor("#ffc800");
+
+  const row1 = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`tx_xiu_${gameId}`).setLabel("Xỉu (3-10)").setStyle(ButtonStyle.Success).setEmoji("🔻"),
+    new ButtonBuilder().setCustomId(`tx_tai_${gameId}`).setLabel("Tài (11-18)").setStyle(ButtonStyle.Danger).setEmoji("🔺"),
+    new ButtonBuilder().setCustomId(`tx_chan_${gameId}`).setLabel("Chẵn").setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId(`tx_le_${gameId}`).setLabel("Lẻ").setStyle(ButtonStyle.Primary)
+  );
+
+  const row2 = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`tx_number_${gameId}`).setLabel("Chọn Số Cụ Thể").setStyle(ButtonStyle.Secondary).setEmoji("🎯")
+  );
+
+  const msg = await interaction.reply({ embeds: [embed], components: [row1, row2] });
+
+  activeTaiXiu.set(channelId, {
+    gameId,
+    messageId: msg.id,
+    channelId,
+    endTime,
+    bets: new Map(), // userId -> {type, amount, choice}
+    isActive: true
+  });
+
+  startCountdown(interaction.channel, gameId, channelId);
+}
+
+async function startCountdown(channel, gameId, channelId) {
+  let game = activeTaiXiu.get(channelId);
+  if (!game) return;
+
+  const diceEmojis = [":xucxac1:", ":xucxac2:", ":xucxac3:", ":xucxac4:", ":xucxac5:", ":xucxac6:"];
+
+  for (let i = 45; i >= 0; i--) {
+    if (!activeTaiXiu.has(channelId)) break;
+
+    const randomDice = diceEmojis[Math.floor(Math.random() * 6)];
+    
+    const embed = new EmbedBuilder()
+      .setTitle(`🎲 Tài Xỉu - Đang chờ kết quả... ${randomDice}`)
+      .setDescription(`⏳ Còn **${i} giây** nữa mở kết quả\n\nĐặt cược nhanh lên!`)
+      .setColor("#ffff00")
+      .setFooter({ text: "Nhiều người chơi cùng lúc được hỗ trợ" });
+
+    try {
+      const msg = await channel.messages.fetch(game.messageId);
+      await msg.edit({ embeds: [embed] });
+    } catch (e) {}
+
+    if (i === 0) break;
+    await new Promise(r => setTimeout(r, 1000));
+  }
+
+  await resolveTaiXiu(channel, channelId);
+}
+
 // LỆNH GÓP TỪ MỚI VÀO GAME NỐI TỪ
     if (interaction.commandName === "goptu") {
       if (!allowedIDs.includes(interaction.user.id)) {
@@ -486,6 +568,52 @@ client.on("interactionCreate", async (interaction) => {
   if (!interaction.isButton()) return;
 
   const id = interaction.customId;
+
+if (!interaction.isButton() && !interaction.isModalSubmit()) return;
+
+// ==================== TÀI XIU BUTTONS ====================
+const id = interaction.customId;
+
+if (id.startsWith("tx_")) {
+  const game = [...activeTaiXiu.values()].find(g => g.gameId === id.split("_")[2]);
+  if (!game || !game.isActive) return interaction.reply({ content: "❌ Ván game đã kết thúc!", ephemeral: true });
+
+  const type = id.split("_")[1];
+
+  if (type === "number") {
+    const modal = new ModalBuilder()
+      .setCustomId(`tx_modal_${game.gameId}`)
+      .setTitle("Nhập số tiền cược");
+
+    const input = new TextInputBuilder()
+      .setCustomId("bet_amount")
+      .setLabel("Số tiền muốn cược")
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true);
+
+    const row = new ActionRowBuilder().addComponents(input);
+    modal.addComponents(row);
+
+    return interaction.showModal(modal);
+  }
+
+  // Xử lý cược nhanh (Tài/Xỉu/Chẵn/Lẻ)
+  handleBet(interaction, type, null, game);
+}
+
+// ==================== MODAL SUBMIT ====================
+if (interaction.isModalSubmit() && interaction.customId.startsWith("tx_modal_")) {
+  const gameId = interaction.customId.split("_")[2];
+  const game = [...activeTaiXiu.values()].find(g => g.gameId === gameId);
+  if (!game) return;
+
+  const amount = parseInt(interaction.fields.getTextInputValue("bet_amount"));
+  if (isNaN(amount) || amount <= 0 || amount > 250000) {
+    return interaction.reply({ content: "❌ Số tiền không hợp lệ!", ephemeral: true });
+  }
+
+  handleBet(interaction, "number", amount, game);
+}
 
   // ================= LÌ XÌ =================
   if (id.startsWith("lixi_cancel_")) {
@@ -1154,6 +1282,8 @@ if (cmd === "stop" || cmd === "chiu") {
           "🔹 `wew chiu`: đầu hàng game nối từ\n" +
           "🔹 `wew sanduangua <số ngựa> <số tiền>`: chơi sàn đua ngựa\n" +
           "🔹 `wew baucua <lựa chọn> <số tiền>`: chơi bầu cua\n" +
+          "🔹 `/lixi (sotien) (soluong) (thoigian)`: lì xì tiền cho anh em\n" +
+          "🔹 `/taixiu`: chơi tài xỉu\n" +
           "🔹 `wew maydanhbac`: chơi máy đánh bạc",
       })
       .addFields({
@@ -2023,7 +2153,7 @@ if (cmd === "unmayman") {
 
   return message.reply(
     `🧹 Đã reset may mắn của ${target}\n` +
-    "Quay lại kiếp đen như chó, hẹ hẹ"
+    "Quay lại kiếp đen, hẹ hẹ"
   );
 }
 
@@ -2235,5 +2365,84 @@ if (i.customId === "mdb_spin_btn") {
   }
 
 });
+
+async function handleBet(interaction, betType, amount, game) {
+  const userId = interaction.user.id;
+  let userCash = money.get(userId) || 0;
+
+  if (!amount) amount = 10000; // mặc định nếu cược nhanh
+  amount = Math.min(amount, 1_000_000);
+
+  if (userCash < amount) {
+    return interaction.reply({ content: `❌ Bạn chỉ có ${formatMoney(userCash)}!`, ephemeral: true });
+  }
+
+  game.bets.set(userId, { type: betType, amount, choice: betType === "number" ? null : betType });
+
+  money.set(userId, userCash - amount);
+  saveData();
+
+  await interaction.reply({
+    content: `✅ **@${interaction.user.username}** đã cược **${formatMoney(amount)}** vào **${betType.toUpperCase()}**`,
+    ephemeral: true
+  });
+}
+
+async function resolveTaiXiu(channel, channelId) {
+  const game = activeTaiXiu.get(channelId);
+  if (!game) return;
+
+  // Roll 3 xúc xắc
+  const dice = [Math.floor(Math.random() * 6) + 1, Math.floor(Math.random() * 6) + 1, Math.floor(Math.random() * 6) + 1];
+  const sum = dice.reduce((a, b) => a + b, 0);
+
+  const resultStr = dice.map(d => `:${'xucxac' + d}:`).join(" ");
+  const isTai = sum >= 11;
+  const isChan = sum % 2 === 0;
+
+  let resultText = `**Kết quả:** ${resultStr} = **${sum}**\n`;
+  resultText += isTai ? "🔺 **TÀI**" : "🔻 **XỈU**";
+  resultText += ` | ${isChan ? "⚪ Chẵn" : "⚫ Lẻ"}`;
+
+  // Xử lý thắng thua
+  let resultEmbed = new EmbedBuilder()
+    .setTitle("🎲 KẾT QUẢ TÀI XIU")
+    .setDescription(resultText)
+    .setColor("#00ff00");
+
+  let summary = "**TỔNG KẾT:**\n";
+
+  for (const [userId, bet] of game.bets) {
+    let win = 0;
+    const user = await client.users.fetch(userId).catch(() => null);
+    const name = user ? user.username : "Unknown";
+
+    let isWin = false;
+
+    if (bet.type === "tai" && isTai) isWin = true;
+    if (bet.type === "xiu" && !isTai) isWin = true;
+    if (bet.type === "chan" && isChan) isWin = true;
+    if (bet.type === "le" && !isChan) isWin = true;
+    if (bet.type === "number") {
+      // Nếu là cược số cụ thể (cần cải tiến sau nếu muốn)
+      isWin = false;
+    }
+
+    if (isWin) {
+      win = bet.amount * 2;
+      money.set(userId, (money.get(userId) || 0) + win);
+      summary += `✅ **@${name}** cược **${formatMoney(bet.amount)}** → **THẮNG** +${formatMoney(win)}\n`;
+    } else {
+      summary += `❌ **@${name}** cược **${formatMoney(bet.amount)}** → **TOẠCH**\n`;
+    }
+  }
+
+  resultEmbed.addFields({ name: "📊 Kết quả cược", value: summary || "Không có ai cược" });
+
+  const finalMsg = await channel.send({ embeds: [resultEmbed] });
+
+  activeTaiXiu.delete(channelId);
+  saveData();
+}
 
 client.login(process.env.TOKEN);
