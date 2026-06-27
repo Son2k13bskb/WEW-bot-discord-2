@@ -453,30 +453,16 @@ if (interaction.commandName === "taixiu") {
       const numberRows = [];
       let currentRow = new ActionRowBuilder();
       for (let num = 3; num <= 18; num++) {
-        currentRow.addComponents(
-          new ButtonBuilder()
-            .setCustomId(`tx_num_${num}_${gameId}`)
-            .setLabel(num.toString())
-            .setStyle(ButtonStyle.Secondary)
-        );
+        currentRow.addComponents(new ButtonBuilder().setCustomId(`tx_num_${num}_${gameId}`).setLabel(num.toString()).setStyle(ButtonStyle.Secondary));
         if (currentRow.components.length === 5 || num === 18) {
           numberRows.push(currentRow);
           currentRow = new ActionRowBuilder();
         }
       }
 
-      const msg = await interaction.reply({ 
-        embeds: [embed], 
-        components: [row1, ...numberRows] 
-      });
+      const msg = await interaction.reply({ embeds: [embed], components: [row1, ...numberRows] });
 
-      activeTaiXiu.set(channelId, {
-        gameId,
-        messageId: msg.id,
-        channelId,
-        bets: new Map(),
-        isActive: true
-      });
+      activeTaiXiu.set(channelId, { gameId, messageId: msg.id, channelId, bets: new Map(), isActive: true });
 
       startTaiXiuCountdown(interaction.channel, gameId, channelId);
     }
@@ -486,6 +472,8 @@ async function startTaiXiuCountdown(channel, gameId, channelId) {
   if (!game) return;
 
 const diceEmojis = ["<:xucxac1:1520344245595275326>", "<:xucxac2:1520344312120999946>", "<:xucxac3:1520344344324735066>", "<:xucxac4:1520345499478266027>", "<:xucxac5:1520344386951708672>", "<:xucxac6:1520345521791963136>"];
+
+const resultStr = dice.map(d => diceEmojis[d-1]).join(" ");
 
 for (let i = 45; i >= 0; i--) {
     if (!activeTaiXiu.has(channelId)) break;
@@ -504,10 +492,10 @@ for (let i = 45; i >= 0; i--) {
     await new Promise(r => setTimeout(r, 1000));
   }
 
-  await resolveTaiXiu(channel, channelId);
+  await resultStr(channel, channelId);
 }
 
-async function resolveTaiXiu(channel, channelId) {
+async function resultStr(channel, channelId) {
   const game = activeTaiXiu.get(channelId);
   if (!game) return;
 
@@ -662,16 +650,17 @@ if (interaction.commandName === "taixiu") {
 }
 
 // ==================== TÀI XIU BUTTON + MODAL ====================
-  if (id && id.startsWith("tx_") || (interaction.isModalSubmit() && interaction.customId.startsWith("tx_bet_"))) {
-    const gameId = (id || interaction.customId).split("_").pop();
+if (interaction.customId?.startsWith("tx_") || interaction.isModalSubmit()) {
+    const customId = interaction.customId || interaction.customId;
+    const gameId = customId.split("_").pop();
     const game = [...activeTaiXiu.values()].find(g => g.gameId === gameId);
 
     if (!game || !game.isActive) {
-      return interaction.reply({ content: "❌ Ván game đã kết thúc!", ephemeral: true }).catch(() => {});
+      return interaction.reply({ content: "❌ Ván game đã kết thúc!", ephemeral: true });
     }
 
     if (interaction.isModalSubmit()) {
-      const betType = interaction.customId.split("_")[2];
+      const betType = customId.split("_")[2];
       let amount = parseInt(interaction.fields.getTextInputValue("amount"));
 
       if (isNaN(amount) || amount <= 0 || amount > 1000000) {
@@ -681,23 +670,18 @@ if (interaction.commandName === "taixiu") {
       const userId = interaction.user.id;
       let userCash = money.get(userId) || 0;
 
-      if (userCash < amount) {
-        return interaction.reply({ content: `❌ Bạn chỉ có ${formatMoney(userCash)}!`, ephemeral: true });
-      }
+      if (userCash < amount) return interaction.reply({ content: `❌ Bạn chỉ có ${formatMoney(userCash)}!`, ephemeral: true });
 
       game.bets.set(userId, { type: betType, amount });
       money.set(userId, userCash - amount);
       saveData();
 
-      return interaction.reply({
-        content: `✅ **@${interaction.user.username}** đã cược **${formatMoney(amount)}** vào **${betType.toUpperCase()}**`,
-        ephemeral: true
-      });
-    } 
+      return interaction.reply({ content: `✅ **@${interaction.user.username}** đã cược **${formatMoney(amount)}** vào **${betType.toUpperCase()}**`, ephemeral: true });
+    }
 
     // Mở Modal
     const modal = new ModalBuilder()
-      .setCustomId(`tx_bet_${id.split("_")[1]}_${gameId}`)
+      .setCustomId(`tx_bet_${customId.split("_")[1]}_${gameId}`)
       .setTitle("Nhập số tiền cược");
 
     const input = new TextInputBuilder()
@@ -2483,7 +2467,7 @@ async function handleBet(interaction, betType, amount, game) {
   });
 }
 
-async function resolveTaiXiu(channel, channelId) {
+async function resultStr(channel, channelId) {
   const game = activeTaiXiu.get(channelId);
   if (!game) return;
 
