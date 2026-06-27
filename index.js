@@ -607,8 +607,6 @@ async function resolveTaiXiu(channel, channelId) {
 
   if (!interaction.isButton()) return;
 
-  const id = interaction.customId;
-
 if (!interaction.isButton() && !interaction.isModalSubmit()) return;
 
 // ====================== TÀI XIU ======================
