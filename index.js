@@ -471,11 +471,9 @@ async function startTaiXiuCountdown(channel, gameId, channelId) {
   let game = activeTaiXiu.get(channelId);
   if (!game) return;
 
-const diceEmojis = ["<:xucxac1:1520344245595275326>", "<:xucxac2:1520344312120999946>", "<:xucxac3:1520344344324735066>", "<:xucxac4:1520345499478266027>", "<:xucxac5:1520344386951708672>", "<:xucxac6:1520345521791963136>"];
+  const diceEmojis = ["<:xucxac1:1520344245595275326>", "<:xucxac2:1520344312120999946>", "<:xucxac3:1520344344324735066>", "<:xucxac4:1520345499478266027>", "<:xucxac5:1520344386951708672>", "<:xucxac6:1520345521791963136>"];
 
-const resultStr = dice.map(d => diceEmojis[d-1]).join(" ");
-
-for (let i = 45; i >= 0; i--) {
+  for (let i = 45; i >= 0; i--) {
     if (!activeTaiXiu.has(channelId)) break;
     const randomDice = diceEmojis[Math.floor(Math.random() * 6)];
     
@@ -492,16 +490,18 @@ for (let i = 45; i >= 0; i--) {
     await new Promise(r => setTimeout(r, 1000));
   }
 
-  await resultStr(channel, channelId);
+  await resolveTaiXiu(channel, channelId);
 }
 
-async function resultStr(channel, channelId) {
+async function resolveTaiXiu(channel, channelId) {
   const game = activeTaiXiu.get(channelId);
   if (!game) return;
 
+  const diceEmojis = ["<:xucxac1:1520344245595275326>", "<:xucxac2:1520344312120999946>", "<:xucxac3:1520344344324735066>", "<:xucxac4:1520345499478266027>", "<:xucxac5:1520344386951708672>", "<:xucxac6:1520345521791963136>"];
+
   const dice = [Math.floor(Math.random()*6)+1, Math.floor(Math.random()*6)+1, Math.floor(Math.random()*6)+1];
   const sum = dice.reduce((a,b)=>a+b,0);
-  const resultStr = dice.map(d => `:${'xucxac'+d}:`).join(" ");
+  const resultStr = dice.map(d => diceEmojis[d-1]).join(" ");
   const isTai = sum >= 11;
   const isChan = sum % 2 === 0;
 
@@ -598,7 +598,8 @@ async function resultStr(channel, channelId) {
 if (!interaction.isButton() && !interaction.isModalSubmit()) return;
 
 // ====================== TÀI XIU ======================
-if (interaction.commandName === "taixiu") {
+// ====================== TÀI XIU ======================
+if (interaction.isChatInputCommand() && interaction.commandName === "taixiu") {
   const channelId = interaction.channel.id;
   if (activeTaiXiu.has(channelId)) {
     return interaction.reply({ content: "❌ Đang có ván Tài Xỉu khác!", ephemeral: true });
@@ -622,10 +623,7 @@ if (interaction.commandName === "taixiu") {
   let currentRow = new ActionRowBuilder();
   for (let num = 3; num <= 18; num++) {
     currentRow.addComponents(
-      new ButtonBuilder()
-        .setCustomId(`tx_num_${num}_${gameId}`)
-        .setLabel(num.toString())
-        .setStyle(ButtonStyle.Secondary)
+      new ButtonBuilder().setCustomId(`tx_num_${num}_${gameId}`).setLabel(num.toString()).setStyle(ButtonStyle.Secondary)
     );
     if (currentRow.components.length === 5 || num === 18) {
       numberRows.push(currentRow);
@@ -633,10 +631,7 @@ if (interaction.commandName === "taixiu") {
     }
   }
 
-  const msg = await interaction.reply({ 
-    embeds: [embed], 
-    components: [row1, ...numberRows] 
-  });
+  const msg = await interaction.reply({ embeds: [embed], components: [row1, ...numberRows] });
 
   activeTaiXiu.set(channelId, {
     gameId,
@@ -651,48 +646,53 @@ if (interaction.commandName === "taixiu") {
 
 // ==================== TÀI XIU BUTTON + MODAL ====================
 if (interaction.customId?.startsWith("tx_") || interaction.isModalSubmit()) {
-    const customId = interaction.customId || interaction.customId;
-    const gameId = customId.split("_").pop();
-    const game = [...activeTaiXiu.values()].find(g => g.gameId === gameId);
+  const customId = interaction.customId;
+  const gameId = customId.split("_").pop();
+  const game = [...activeTaiXiu.values()].find(g => g.gameId === gameId);
 
-    if (!game || !game.isActive) {
-      return interaction.reply({ content: "❌ Ván game đã kết thúc!", ephemeral: true });
-    }
-
-    if (interaction.isModalSubmit()) {
-      const betType = customId.split("_")[2];
-      let amount = parseInt(interaction.fields.getTextInputValue("amount"));
-
-      if (isNaN(amount) || amount <= 0 || amount > 1000000) {
-        return interaction.reply({ content: "❌ Số tiền phải từ 1 đến 1.000.000!", ephemeral: true });
-      }
-
-      const userId = interaction.user.id;
-      let userCash = money.get(userId) || 0;
-
-      if (userCash < amount) return interaction.reply({ content: `❌ Bạn chỉ có ${formatMoney(userCash)}!`, ephemeral: true });
-
-      game.bets.set(userId, { type: betType, amount });
-      money.set(userId, userCash - amount);
-      saveData();
-
-      return interaction.reply({ content: `✅ **@${interaction.user.username}** đã cược **${formatMoney(amount)}** vào **${betType.toUpperCase()}**`, ephemeral: true });
-    }
-
-    // Mở Modal
-    const modal = new ModalBuilder()
-      .setCustomId(`tx_bet_${customId.split("_")[1]}_${gameId}`)
-      .setTitle("Nhập số tiền cược");
-
-    const input = new TextInputBuilder()
-      .setCustomId("amount")
-      .setLabel("Số tiền (tối đa 1.000.000)")
-      .setStyle(TextInputStyle.Short)
-      .setRequired(true);
-
-    modal.addComponents(new ActionRowBuilder().addComponents(input));
-    return interaction.showModal(modal);
+  if (!game || !game.isActive) {
+    return interaction.reply({ content: "❌ Ván game đã kết thúc!", ephemeral: true });
   }
+
+  if (interaction.isModalSubmit()) {
+    const betType = customId.split("_")[2];
+    let amount = parseInt(interaction.fields.getTextInputValue("amount"));
+
+    if (isNaN(amount) || amount <= 0 || amount > 1000000) {
+      return interaction.reply({ content: "❌ Số tiền phải từ 1 đến 1.000.000!", ephemeral: true });
+    }
+
+    const userId = interaction.user.id;
+    let userCash = money.get(userId) || 0;
+
+    if (userCash < amount) {
+      return interaction.reply({ content: `❌ Bạn chỉ có ${formatMoney(userCash)}!`, ephemeral: true });
+    }
+
+    game.bets.set(userId, { type: betType, amount });
+    money.set(userId, userCash - amount);
+    saveData();
+
+    return interaction.reply({
+      content: `✅ **@${interaction.user.username}** đã cược **${formatMoney(amount)}** vào **${betType.toUpperCase()}**`,
+      ephemeral: true
+    });
+  }
+
+  // Mở Modal
+  const modal = new ModalBuilder()
+    .setCustomId(`tx_bet_${customId.split("_")[1]}_${gameId}`)
+    .setTitle("Nhập số tiền cược");
+
+  const input = new TextInputBuilder()
+    .setCustomId("amount")
+    .setLabel("Số tiền (tối đa 1.000.000)")
+    .setStyle(TextInputStyle.Short)
+    .setRequired(true);
+
+  modal.addComponents(new ActionRowBuilder().addComponents(input));
+  return interaction.showModal(modal);
+}
 
   // ================= LÌ XÌ =================
   if (id.startsWith("lixi_cancel_")) {
