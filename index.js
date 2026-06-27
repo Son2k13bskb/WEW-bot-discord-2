@@ -1,5 +1,4 @@
-const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder } = require('discord.js');
-
+const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, AttachmentBuilder } = require('discord.js');
 const BACKUP_CHANNEL_ID = "1517914977992708138";
 
 function parseBet(input, userCash) {
@@ -428,7 +427,7 @@ client.on("interactionCreate", async (interaction) => {
       return interaction.reply({ content: `✅ Đã thiết lập kênh chơi nối từ mặc định: ${channel}`, ephemeral: true });
     }
 
-// ====================== TÀI XIU (ĐÃ FIX COMPONENT) ======================
+// ====================== TÀI XIU ======================
 if (interaction.commandName === "taixiu") {
   const channelId = interaction.channel.id;
   if (activeTaiXiu.has(channelId)) {
@@ -449,7 +448,6 @@ if (interaction.commandName === "taixiu") {
     new ButtonBuilder().setCustomId(`tx_le_${gameId}`).setLabel("Lẻ").setStyle(ButtonStyle.Primary)
   );
 
-  // Tạo nút số với max 5 nút/row
   const numberRows = [];
   let currentRow = new ActionRowBuilder();
   for (let num = 3; num <= 18; num++) {
@@ -611,60 +609,108 @@ async function resolveTaiXiu(channel, channelId) {
 
 if (!interaction.isButton() && !interaction.isModalSubmit()) return;
 
-// ==================== TÀI XIU BUTTONS ====================
+// ====================== TÀI XIU ======================
+if (interaction.commandName === "taixiu") {
+  const channelId = interaction.channel.id;
+  if (activeTaiXiu.has(channelId)) {
+    return interaction.reply({ content: "❌ Đang có ván Tài Xỉu khác!", ephemeral: true });
+  }
 
-if (id.startsWith("tx_")) {
-  const parts = id.split("_");
-  const type = parts[1];
-  const gameId = parts[parts.length - 1];
+  const gameId = Date.now().toString();
+
+  const embed = new EmbedBuilder()
+    .setTitle("🎲 Tài Xỉu WEW - Nhà cái Châu Chấu! 🔥")
+    .setDescription("Chọn loại cược 👇\nSau đó nhập số tiền (tối đa **1.000.000 VNĐ**)")
+    .setColor("#ffc800");
+
+  const row1 = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`tx_xiu_${gameId}`).setLabel("Xỉu (3-10)").setStyle(ButtonStyle.Success).setEmoji("🔻"),
+    new ButtonBuilder().setCustomId(`tx_tai_${gameId}`).setLabel("Tài (11-18)").setStyle(ButtonStyle.Danger).setEmoji("🔺"),
+    new ButtonBuilder().setCustomId(`tx_chan_${gameId}`).setLabel("Chẵn").setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId(`tx_le_${gameId}`).setLabel("Lẻ").setStyle(ButtonStyle.Primary)
+  );
+
+  const numberRows = [];
+  let currentRow = new ActionRowBuilder();
+  for (let num = 3; num <= 18; num++) {
+    currentRow.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`tx_num_${num}_${gameId}`)
+        .setLabel(num.toString())
+        .setStyle(ButtonStyle.Secondary)
+    );
+    if (currentRow.components.length === 5 || num === 18) {
+      numberRows.push(currentRow);
+      currentRow = new ActionRowBuilder();
+    }
+  }
+
+  const msg = await interaction.reply({ 
+    embeds: [embed], 
+    components: [row1, ...numberRows] 
+  });
+
+  activeTaiXiu.set(channelId, {
+    gameId,
+    messageId: msg.id,
+    channelId,
+    bets: new Map(),
+    isActive: true
+  });
+
+  startTaiXiuCountdown(interaction.channel, gameId, channelId);
+}
+
+// ==================== TÀI XIU BUTTON + MODAL ====================
+if (id.startsWith("tx_") || (interaction.isModalSubmit() && interaction.customId.startsWith("tx_bet_"))) {
+  const gameId = id.split("_").pop() || interaction.customId.split("_").pop();
   const game = [...activeTaiXiu.values()].find(g => g.gameId === gameId);
 
   if (!game || !game.isActive) {
     return interaction.reply({ content: "❌ Ván game đã kết thúc!", ephemeral: true });
   }
 
+  if (interaction.isModalSubmit()) {
+    // Xử lý Modal
+    const betType = interaction.customId.split("_")[2];
+    let amount = parseInt(interaction.fields.getTextInputValue("amount"));
+
+    if (isNaN(amount) || amount <= 0 || amount > 1000000) {
+      return interaction.reply({ content: "❌ Số tiền phải từ 1 đến 1.000.000!", ephemeral: true });
+    }
+
+    const userId = interaction.user.id;
+    let userCash = money.get(userId) || 0;
+
+    if (userCash < amount) {
+      return interaction.reply({ content: `❌ Bạn chỉ có ${formatMoney(userCash)}!`, ephemeral: true });
+    }
+
+    game.bets.set(userId, { type: betType, amount });
+
+    money.set(userId, userCash - amount);
+    saveData();
+
+    await interaction.reply({
+      content: `✅ **@${interaction.user.username}** đã cược **${formatMoney(amount)}** vào **${betType.toUpperCase()}**`,
+      ephemeral: true
+    });
+    return;
+  } 
+
+  // Xử lý Button → Mở Modal
   const modal = new ModalBuilder()
-    .setCustomId(`tx_bet_${type}_${gameId}`)
-    .setTitle(`Cược ${type.toUpperCase()}`);
+    .setCustomId(`tx_bet_${id.split("_")[1]}_${gameId}`)
+    .setTitle("Nhập số tiền cược");
 
   const input = new TextInputBuilder()
     .setCustomId("amount")
-    .setLabel("Số tiền muốn cược (tối đa 1.000.000)")
+    .setLabel("Số tiền (tối đa 1.000.000)")
     .setStyle(TextInputStyle.Short)
     .setRequired(true);
 
   modal.addComponents(new ActionRowBuilder().addComponents(input));
-
   return interaction.showModal(modal);
-}
-
-// ==================== MODAL SUBMIT ====================
-if (interaction.isModalSubmit() && interaction.customId.startsWith("tx_bet_")) {
-  const [_, __, betType, gameId] = interaction.customId.split("_");
-  const game = [...activeTaiXiu.values()].find(g => g.gameId === gameId);
-  if (!game) return interaction.reply({ content: "Ván game không tồn tại!", ephemeral: true });
-
-  let amount = parseInt(interaction.fields.getTextInputValue("amount"));
-  if (isNaN(amount) || amount <= 0 || amount > 1000000) {
-    return interaction.reply({ content: "❌ Số tiền phải từ 1 đến 1.000.000!", ephemeral: true });
-  }
-
-  const userId = interaction.user.id;
-  let userCash = money.get(userId) || 0;
-
-  if (userCash < amount) {
-    return interaction.reply({ content: `❌ Bạn chỉ có ${formatMoney(userCash)}!`, ephemeral: true });
-  }
-
-  game.bets.set(userId, { type: betType, amount });
-
-  money.set(userId, userCash - amount);
-  saveData();
-
-  await interaction.reply({
-    content: `✅ **@${interaction.user.username}** đã cược **${formatMoney(amount)}** vào **${betType.toUpperCase()}**`,
-    ephemeral: true
-  });
 }
 
   // ================= LÌ XÌ =================
