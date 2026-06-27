@@ -572,7 +572,6 @@ async function startCountdown(channel, gameId, channelId) {
 if (!interaction.isButton() && !interaction.isModalSubmit()) return;
 
 // ==================== TÀI XIU BUTTONS ====================
-const id = interaction.customId;
 
 if (id.startsWith("tx_")) {
   const game = [...activeTaiXiu.values()].find(g => g.gameId === id.split("_")[2]);
