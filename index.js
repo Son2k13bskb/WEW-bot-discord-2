@@ -663,11 +663,11 @@ if (interaction.commandName === "taixiu") {
 
 // ==================== TÀI XIU BUTTON + MODAL ====================
 if (id.startsWith("tx_") || (interaction.isModalSubmit() && interaction.customId.startsWith("tx_bet_"))) {
-  const gameId = id.split("_").pop() || interaction.customId.split("_").pop();
+  const gameId = (id || interaction.customId).split("_").pop();
   const game = [...activeTaiXiu.values()].find(g => g.gameId === gameId);
 
   if (!game || !game.isActive) {
-    return interaction.reply({ content: "❌ Ván game đã kết thúc!", ephemeral: true });
+    return interaction.reply({ content: "❌ Ván game đã kết thúc!", ephemeral: true }).catch(() => {});
   }
 
   if (interaction.isModalSubmit()) {
@@ -698,7 +698,7 @@ if (id.startsWith("tx_") || (interaction.isModalSubmit() && interaction.customId
     return;
   } 
 
-  // Xử lý Button → Mở Modal
+  // Mở Modal khi bấm nút
   const modal = new ModalBuilder()
     .setCustomId(`tx_bet_${id.split("_")[1]}_${gameId}`)
     .setTitle("Nhập số tiền cược");
