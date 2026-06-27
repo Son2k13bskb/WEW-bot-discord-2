@@ -429,44 +429,6 @@ client.on("interactionCreate", async (interaction) => {
       return interaction.reply({ content: `✅ Đã thiết lập kênh chơi nối từ mặc định: ${channel}`, ephemeral: true });
     }
 
-// ====================== TÀI XIU ======================
-if (interaction.commandName === "taixiu") {
-      const channelId = interaction.channel.id;
-      if (activeTaiXiu.has(channelId)) {
-        return interaction.reply({ content: "❌ Đang có ván Tài Xỉu khác!", ephemeral: true });
-      }
-
-      const gameId = Date.now().toString();
-
-      const embed = new EmbedBuilder()
-        .setTitle("🎲 Tài Xỉu WEW - Nhà cái Châu Chấu! 🔥")
-        .setDescription("Chọn loại cược 👇\nSau đó nhập số tiền (tối đa **1.000.000 VNĐ**)")
-        .setColor("#ffc800");
-
-      const row1 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`tx_xiu_${gameId}`).setLabel("Xỉu (3-10)").setStyle(ButtonStyle.Success).setEmoji("🔻"),
-        new ButtonBuilder().setCustomId(`tx_tai_${gameId}`).setLabel("Tài (11-18)").setStyle(ButtonStyle.Danger).setEmoji("🔺"),
-        new ButtonBuilder().setCustomId(`tx_chan_${gameId}`).setLabel("Chẵn").setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`tx_le_${gameId}`).setLabel("Lẻ").setStyle(ButtonStyle.Primary)
-      );
-
-      const numberRows = [];
-      let currentRow = new ActionRowBuilder();
-      for (let num = 3; num <= 18; num++) {
-        currentRow.addComponents(new ButtonBuilder().setCustomId(`tx_num_${num}_${gameId}`).setLabel(num.toString()).setStyle(ButtonStyle.Secondary));
-        if (currentRow.components.length === 5 || num === 18) {
-          numberRows.push(currentRow);
-          currentRow = new ActionRowBuilder();
-        }
-      }
-
-      const msg = await interaction.reply({ embeds: [embed], components: [row1, ...numberRows] });
-
-      activeTaiXiu.set(channelId, { gameId, messageId: msg.id, channelId, bets: new Map(), isActive: true });
-
-      startTaiXiuCountdown(interaction.channel, gameId, channelId);
-    }
-
 async function startTaiXiuCountdown(channel, gameId, channelId) {
   let game = activeTaiXiu.get(channelId);
   if (!game) return;
@@ -597,7 +559,6 @@ async function resolveTaiXiu(channel, channelId) {
 
 if (!interaction.isButton() && !interaction.isModalSubmit()) return;
 
-// ====================== TÀI XIU ======================
 // ====================== TÀI XIU ======================
 if (interaction.isChatInputCommand() && interaction.commandName === "taixiu") {
   const channelId = interaction.channel.id;
