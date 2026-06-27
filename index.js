@@ -17,6 +17,8 @@ function parseBet(input, userCash) {
   return num;
 }
 
+const pendingLixi = new Map();
+const activeLixi = new Map();
 const logs = [];
 const serverLogsConfigs = new Map();
 const luckRates = new Map();
@@ -118,6 +120,22 @@ const slashCommands = [
         .setRequired(true)
     )
     .toJSON(),
+  new SlashCommandBuilder()
+    .setName("lixi")
+    .setDescription("Tạo phong bao lì xì cho mọi người")
+    .addIntegerOption(option => 
+      option.setName("sotien")
+      .setDescription("Số tiền mỗi người nhận")
+      .setRequired(true))
+    .addIntegerOption(option => 
+      option.setName("soluong")
+      .setDescription("Số lượng người có thể nhận")
+      .setRequired(true))
+    .addStringOption(option => 
+      option.setName("thoigian")
+      .setDescription("Thời gian để nhận (vd: 30s, 10m, 1h, 1d)")
+      .setRequired(true)),
+
   new SlashCommandBuilder()
     .setName("goptu")
     .setDescription("Góp thêm từ mới vào từ điển nối từ (Chỉ Owner)")
@@ -328,6 +346,51 @@ function addLog(user, command, guild) {
 
 client.on("interactionCreate", async (interaction) => {
   if (interaction.isChatInputCommand()) {
+    if (interaction.commandName === "lixi") {
+      const sotien = interaction.options.getInteger("sotien");
+      const soluong = interaction.options.getInteger("soluong");
+      const thoigian = interaction.options.getString("thoigian");
+
+      const regex = /^(\d+)(s|m|h|d)$/;
+      const match = thoigian.match(regex);
+      if (!match) {
+        return interaction.reply({ content: "❌ Thời gian không hợp lệ! Vui lòng dùng định dạng s/m/h/d (vd: 30s, 10m, 1h, 1d)", ephemeral: true });
+      }
+
+      const val = parseInt(match[1]);
+      const unit = match[2];
+      let msTime = 0;
+      if (unit === 's') msTime = val * 1000;
+      if (unit === 'm') msTime = val * 60 * 1000;
+      if (unit === 'h') msTime = val * 60 * 60 * 1000;
+      if (unit === 'd') msTime = val * 24 * 60 * 60 * 1000;
+
+      if (sotien <= 0 || soluong <= 0) return interaction.reply({ content: "❌ Số tiền và số lượng phải lớn hơn 0!", ephemeral: true });
+
+      const creatorCash = money.get(interaction.user.id) || 0;
+      if (creatorCash < sotien) return interaction.reply({ content: `❌ Bạn không đủ tiền! Cần ít nhất **${formatMoney(sotien)}** để có thể phát lì xì.`, ephemeral: true });
+
+      const uniqueId = Date.now().toString();
+      const confirmRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`lixi_confirm_${uniqueId}`).setLabel('Xác nhận').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`lixi_cancel_${uniqueId}`).setLabel('Hủy').setStyle(ButtonStyle.Danger)
+      );
+
+      pendingLixi.set(uniqueId, {
+        creatorId: interaction.user.id,
+        creatorName: interaction.user.globalName || interaction.user.username,
+        sotien,
+        soluong,
+        msTime
+      });
+
+      return interaction.reply({
+        content: `🧧 **XÁC NHẬN TẠO LÌ XÌ**\n- Số tiền mỗi người: **${formatMoney(sotien)}**\n- Số lượng tối đa: **${soluong}** người\n- Thời gian: **${thoigian}**\n\n*(Lưu ý: Tiền sẽ bị trừ thẳng từ ví của bạn mỗi khi có người khác bấm nhận)*`,
+        components: [confirmRow],
+        ephemeral: true // Ẩn với người khác, chỉ chủ tọa nhìn thấy
+      });
+    }
+
   if (interaction.commandName === "setlogschannel") {
     if (!interaction.guild || interaction.guild.ownerId !== interaction.user.id) {
       return interaction.reply({ content: "❌ Chỉ Owner Server này mới có quyền dùng lệnh này!", ephemeral: true });
@@ -423,6 +486,112 @@ client.on("interactionCreate", async (interaction) => {
   if (!interaction.isButton()) return;
 
   const id = interaction.customId;
+
+  // ================= LÌ XÌ =================
+  if (id.startsWith("lixi_cancel_")) {
+    const uniqueId = id.split("_")[2];
+    if (!pendingLixi.has(uniqueId)) return interaction.reply({ content: "❌ Yêu cầu này đã hết hạn.", ephemeral: true });
+    
+    pendingLixi.delete(uniqueId);
+    return interaction.update({ content: "❌ Bạn đã hủy tạo phong bao lì xì.", components: [], embeds: [] });
+  }
+
+  if (id.startsWith("lixi_confirm_")) {
+    const uniqueId = id.split("_")[2];
+    const data = pendingLixi.get(uniqueId);
+    if (!data) return interaction.reply({ content: "❌ Yêu cầu này đã hết hạn.", ephemeral: true });
+    
+    pendingLixi.delete(uniqueId);
+    
+    const endTime = Date.now() + data.msTime;
+    const endTimestamp = Math.floor(endTime / 1000);
+    
+    const embed = new EmbedBuilder()
+      .setTitle("🧧 PHONG BAO LÌ XÌ 🧧")
+      .setDescription(`**${data.creatorName}** đã tặng cho anh em phong bao lì xì!\n\nSố lượng người nhận tối đa: **${data.soluong}**\nSố người đã nhận: **0** Số lượng phong bao còn lại: **${data.soluong}**\nThời gian còn lại: <t:${endTimestamp}:R>`)
+      .setColor("#ff0000");
+        
+    const lixiRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`lixi_claim_${uniqueId}`).setLabel("Nhận Lì Xì").setStyle(ButtonStyle.Primary).setEmoji("🧧")
+    );
+    
+    await interaction.update({ content: "✅ Đã tạo phong bao lì xì thành công!", components: [], embeds: [] });
+    
+    const lixiMsg = await interaction.channel.send({ embeds: [embed], components: [lixiRow] });
+    
+    activeLixi.set(uniqueId, {
+      creatorId: data.creatorId,
+      creatorName: data.creatorName,
+      sotien: data.sotien,
+      soluong: data.soluong,
+      endTime: endTime,
+      claimedUsers: [],
+      messageId: lixiMsg.id
+    });
+    
+    // Tự động vô hiệu hóa nút khi hết thời gian
+    setTimeout(async () => {
+      const currentLixi = activeLixi.get(uniqueId);
+      if (currentLixi) {
+        embed.setDescription(`**${currentLixi.creatorName}** đã tặng cho anh em phong bao lì xì!\n\nSố lượng người nhận tối đa: **${currentLixi.soluong}**\nSố người đã nhận: **${currentLixi.claimedUsers.length}** Số lượng phong bao còn lại: **${currentLixi.soluong - currentLixi.claimedUsers.length}**\nThời gian còn lại: **Đã hết hạn!**`);
+        const disabledRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId("lixi_expired").setLabel("Đã hết hạn").setStyle(ButtonStyle.Secondary).setDisabled(true)
+        );
+        await lixiMsg.edit({ embeds: [embed], components: [disabledRow] }).catch(()=>{});
+        activeLixi.delete(uniqueId);
+      }
+    }, data.msTime);
+    return;
+  }
+
+  if (id.startsWith("lixi_claim_")) {
+    const uniqueId = id.split("_")[2];
+    const data = activeLixi.get(uniqueId);
+    
+    if (!data) return interaction.reply({ content: "❌ Phong bao lì xì này đã hết hạn hoặc không tồn tại!", ephemeral: true });
+    
+    if (Date.now() > data.endTime) return interaction.reply({ content: "❌ Phong bao lì xì này đã hết thời gian nhận!", ephemeral: true });
+    
+    if (data.claimedUsers.includes(interaction.user.id)) {
+      return interaction.reply({ content: "❌ Bạn đã nhận phong bao này rồi, đừng tham lam!", ephemeral: true });
+    }
+    
+    const creatorCash = money.get(data.creatorId) || 0;
+    if (creatorCash < data.sotien) {
+      return interaction.reply({ content: "❌ Người tạo phong bao đã hết tiền, không thể nhận thêm!", ephemeral: true });
+    }
+    
+    // Tiến hành trừ tiền người gửi, cộng tiền người nhận
+    data.claimedUsers.push(interaction.user.id);
+    money.set(data.creatorId, creatorCash - data.sotien);
+    
+    const receiverCash = money.get(interaction.user.id) || 0;
+    money.set(interaction.user.id, receiverCash + data.sotien);
+    saveData(); // Sử dụng hàm saveData() đã có sẵn của bạn
+    
+    const remain = data.soluong - data.claimedUsers.length;
+    const endTimestamp = Math.floor(data.endTime / 1000);
+    
+    const embed = new EmbedBuilder()
+      .setTitle("🧧 PHONG BAO LÌ XÌ 🧧")
+      .setDescription(`**${data.creatorName}** đã tặng cho anh em phong bao lì xì!\n\nSố lượng người nhận tối đa: **${data.soluong}**\nSố người đã nhận: **${data.claimedUsers.length}** Số lượng phong bao còn lại: **${remain}**\nThời gian còn lại: <t:${endTimestamp}:R>`)
+      .setColor("#ff0000");
+        
+    await interaction.message.edit({ embeds: [embed] }).catch(()=>{});
+    
+    interaction.reply({ content: `🎉 Chúc mừng! Bạn đã nhận được **${formatMoney(data.sotien)}** từ phong bao lì xì của **${data.creatorName}**!`, ephemeral: true });
+    
+    // Khi hết số lượng phong bao thì vô hiệu hóa nút
+    if (remain <= 0) {
+      const disabledRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId("lixi_empty").setLabel("Đã hết lì xì").setStyle(ButtonStyle.Secondary).setDisabled(true)
+      );
+      embed.setDescription(`**${data.creatorName}** đã tặng cho anh em phong bao lì xì!\n\nSố lượng người nhận tối đa: **${data.soluong}**\nSố người đã nhận: **${data.claimedUsers.length}** Số lượng phong bao còn lại: **0**\nThời gian còn lại: **Đã hết bao lì xì!**`);
+      await interaction.message.edit({ embeds: [embed], components: [disabledRow] }).catch(()=>{});
+      activeLixi.delete(uniqueId);
+    }
+    return;
+  }
 
   // ================= KÉO BÚA BAO =================
   if (id.startsWith("kbb_")) {
@@ -651,19 +820,31 @@ function findBank(input) {
 
 function updateBank(userId) {
   if (!bankData.has(userId)) return;
-  let data = bankData.get(userId);
-  let bank = banks[data.bank];
-  if (!bank) return;
-  let now = Date.now();
-  let passed = now - data.lastUpdate;
-  let cycles = Math.floor(passed / bank.duration);
-  if (cycles > 0) {
-    for (let i = 0; i < cycles; i++) {
-      data.amount += data.amount * bank.interest;
-    }
-    data.lastUpdate += cycles * bank.duration;
-    bankData.set(userId, data);
+  let userBanks = bankData.get(userId);
+  
+  // Tương thích ngược: Nếu data là bản cũ (chỉ có 1 bank), tự động chuyển sang format danh sách mới
+  if (userBanks.bank) {
+    let oldBank = userBanks.bank;
+    userBanks = { [oldBank]: { amount: userBanks.amount, lastUpdate: userBanks.lastUpdate } };
   }
+
+  for (let bankKey in userBanks) {
+    let bank = banks[bankKey];
+    if (!bank) continue;
+
+    let data = userBanks[bankKey];
+    let now = Date.now();
+    let passed = now - data.lastUpdate;
+    let cycles = Math.floor(passed / bank.duration);
+
+    if (cycles > 0) {
+      for (let i = 0; i < cycles; i++) {
+        data.amount += data.amount * bank.interest;
+      }
+      data.lastUpdate += cycles * bank.duration;
+    }
+  }
+  bankData.set(userId, userBanks);
 }
 
 client.once("ready", async () => { 
@@ -1578,23 +1759,20 @@ if (cmd === "baucua") {
 }
 
   // CHECK NGÂN HÀNG
-  if (cmd === "checknh") {
+if (cmd === "checknh") {
     updateBank(userId);
     let username = message.author.username;
     let embed = new EmbedBuilder()
       .setColor("#00aaff")
       .setTitle(`🏦 SỔ TIẾT KIỆM TÍN DỤNG: **${username}**`);
-
+    
     let desc = "";
+    let userBanks = bankData.get(userId) || {};
+
     for (let key in banks) {
       let bank = banks[key];
-      let amount = 0;
-      if (bankData.has(userId)) {
-        let data = bankData.get(userId);
-        if (data.bank === key) {
-          amount = data.amount;
-        }
-      }
+      let amount = userBanks[key] ? userBanks[key].amount : 0;
+      
       desc += `💵 ${bank.name}\n`;
       desc += `**${formatMoney(amount)}** (Lãi ${(bank.interest * 100).toFixed(0)}%/${bank.duration / 86400000} ngày)\n\n`;
     }
@@ -1612,7 +1790,7 @@ if (cmd === "baucua") {
   }
 
 // GỬI NGÂN HÀNG
-  if (cmd === "gt") {
+if (cmd === "gt") {
     let bankInput = args.slice(0, -1).join(" ");
     let bankKey = findBank(bankInput);
     let cash = money.get(userId);
@@ -1623,70 +1801,62 @@ if (cmd === "baucua") {
     if (!bankInput) return message.reply("⚠️ Thiếu tên ngân hàng!");
     if (!bankKey) return message.reply("Ngân hàng không tồn tại!");
     if (isNaN(amount) || amount <= 0) return message.reply("Số tiền không hợp lệ!");
-
-    if (amount > cash) {
-      return message.reply(`Không đủ tiền (${formatMoney(cash)})`);
-    }
+    if (amount > cash) return message.reply(`Không đủ tiền (${formatMoney(cash)})`);
 
     updateBank(userId);
     let bank = banks[bankKey];
+    
+    // Lấy danh sách ngân hàng của user, nếu chưa có thì tạo mới dạng object {}
+    let userBanks = bankData.get(userId) || {};
 
-    if (!bankData.has(userId)) {
-      bankData.set(userId, {
-        bank: bankKey,
-        amount: amount,
-        lastUpdate: Date.now()
-      });
+    if (!userBanks[bankKey]) {
+      userBanks[bankKey] = { amount: amount, lastUpdate: Date.now() };
     } else {
-      let data = bankData.get(userId);
-      if (data.bank !== bankKey) {
-        data.bank = bankKey;
-        data.amount = amount;
-        data.lastUpdate = Date.now();
-      } else {
-        data.amount += amount;
-      }
-      bankData.set(userId, data);
+      userBanks[bankKey].amount += amount;
     }
 
+    bankData.set(userId, userBanks);
     money.set(userId, cash - amount);
-    saveData(); 
+    saveData();
 
-    message.reply(
-      `**ĐÃ GỬI THÀNH CÔNG:** Bạn đã gửi **${formatMoney(amount)}** vào ngân hàng **${bank.name}**`
-    );
+    message.reply(`**ĐÃ GỬI THÀNH CÔNG:** Bạn đã gửi **${formatMoney(amount)}** vào ngân hàng **${bank.name}**`);
   }
 
 // RÚT NGÂN HÀNG
-  if (cmd === "rt") {
+if (cmd === "rt") {
     let bankInput = args.slice(0, -1).join(" ");
     let bankKey = findBank(bankInput);
 
     if (!bankInput) return message.reply("⚠️ Thiếu tên ngân hàng cần rút!");
     if (!bankKey) return message.reply("Ngân hàng không tồn tại!");
-    if (!bankData.has(userId)) return message.reply("Bạn không có tiền trong ngân hàng này!");
 
     updateBank(userId);
-    let data = bankData.get(userId);
+    let userBanks = bankData.get(userId);
 
-    if (data.bank !== bankKey) return message.reply("Bạn không có tiền trong ngân hàng này!");
+    if (!userBanks || !userBanks[bankKey]) return message.reply("Bạn không có tiền trong ngân hàng này!");
 
+    let bankRecord = userBanks[bankKey];
     let amountArg = args[args.length - 1]?.toLowerCase();
-    let amount = amountArg === "all" ? data.amount : parseInt(amountArg);
+    let amount = amountArg === "all" ? bankRecord.amount : parseInt(amountArg);
 
     if (isNaN(amount) || amount <= 0) return message.reply("Số tiền không hợp lệ!");
-    if (amount > data.amount) return message.reply("Không đủ tiền trong ngân hàng!");
+    if (amount > bankRecord.amount) return message.reply("Không đủ tiền trong ngân hàng!");
 
-    data.amount -= amount;
+    bankRecord.amount -= amount;
+    
+    // Nếu rút sạch tiền thì xóa data của ngân hàng đó đi
+    if (bankRecord.amount <= 0) {
+      delete userBanks[bankKey];
+    }
 
-    if (data.amount <= 0) {
-      bankData.delete(userId);
+    if (Object.keys(userBanks).length === 0) {
+      bankData.delete(userId); // Không còn gửi ngân hàng nào nữa
     } else {
-      bankData.set(userId, data);
+      bankData.set(userId, userBanks);
     }
 
     money.set(userId, money.get(userId) + amount);
-    saveData(); 
+    saveData();
 
     message.reply(`**ĐÃ RÚT THÀNH CÔNG:** Bạn đã rút **${formatMoney(amount)}** khỏi ngân hàng **${banks[bankKey].name}**`);
   }
@@ -1870,10 +2040,10 @@ if (cmd === "maydanhbac") {
     { symbol: "🍉", weight: 100 },       // 10%
     { symbol: "🔔", weight: 60 },        // 6%
     { symbol: "💎", weight: 4 },        // 0.4%
-    { symbol: ":BARdon:1519008641011814540", weight: 35 },  // 3.5%
-    { symbol: ":BARdoi:1519008692836761691", weight: 20 },  // 2%
-    { symbol: ":BARba:1519008724948090951", weight: 10 },   // 1%
-    { symbol: ":jackpot:1519008775082610910", weight: 1 }  // 0.1% 
+    { symbol: "<:BARdon:1519008641011814540>", weight: 35 },  // 3.5%
+    { symbol: "<:BARdoi:1519008692836761691>", weight: 20 },  // 2%
+    { symbol: "<:BARba:1519008724948090951>", weight: 10 },   // 1%
+    { symbol: "<:jackpot:1519008775082610910>", weight: 1 }  // 0.1% 
   ];
 
   function getRandomSymbol() {
@@ -1890,10 +2060,10 @@ if (cmd === "maydanhbac") {
   }
 
   const payouts = {
-    ":jackpot:1519008775082610910": { 3: 100,},
-    ":BARba:1519008724948090951": { 3: 50 },
-    ":BARdoi:1519008692836761691": { 3: 30 },
-    ":BARdon:1519008641011814540": { 3: 20 },
+    "<:jackpot:1519008775082610910>": { 3: 100,},
+    "<:BARba:1519008724948090951>": { 3: 50 },
+    "<:BARdoi:1519008692836761691>": { 3: 30 },
+    "<:BARdon:1519008641011814540>": { 3: 20 },
     "💎": { 3: 80 },
     "🔔": { 3: 15 },
     "🍉": { 3: 10 },
@@ -1939,7 +2109,7 @@ if (cmd === "maydanhbac") {
       return;
     }
 
-    if (i.customId === "mdb_spin_btn") { 
+if (i.customId === "mdb_spin_btn") { 
       const lastSpin = mayDanhBacCooldown.get(userId) || 0;
       const now = Date.now();
       if (now - lastSpin < COOLDOWN_TIME) {
@@ -1955,17 +2125,35 @@ if (cmd === "maydanhbac") {
       mayDanhBacCooldown.set(userId, now);
       money.set(userId, cash - SPIN_COST);
 
-      const result = [
-        getRandomSymbol(),
-        getRandomSymbol(),
-        getRandomSymbol()
-      ];
+      // --- ĐỒNG BỘ MAY MẮN ---
+      let luckBoost = getLuck(userId, 0); // Lấy % buff may mắn của người chơi
+      let customWeights = symbolWeights.map(item => {
+        let w = item.weight;
+        // Tăng tỉ lệ ra các giải xịn (Jackpot, BAR, Kim cương) dựa trên buff may mắn
+        if (item.symbol.includes("BAR") || item.symbol.includes("jackpot") || item.symbol === "💎") {
+          w += w * luckBoost * 5; 
+        }
+        return { symbol: item.symbol, weight: w };
+      });
+
+      function getLuckySymbol() {
+        let total = customWeights.reduce((acc, curr) => acc + curr.weight, 0);
+        let rand = Math.floor(Math.random() * total);
+        let sum = 0;
+        for (let item of customWeights) {
+          sum += item.weight;
+          if (rand < sum) return item.symbol;
+        }
+        return "🍒";
+      }
+
+      const result = [getLuckySymbol(), getLuckySymbol(), getLuckySymbol()];
 
       let winAmount = 0;
       let multiplier = 0;
       let isWin = false;
-
       const counts = {};
+
       result.forEach(s => counts[s] = (counts[s] || 0) + 1);
 
       for (const [symbol, count] of Object.entries(counts)) {
@@ -1993,9 +2181,10 @@ if (cmd === "maydanhbac") {
         return res;
       });
 
-      const resultString = `| ${result[0]} | ${result[1]} | ${result[2]} |`;
+      // FIX EMOJI: Dùng formattedResult thay vì result
+      const resultString = `| ${formattedResult[0]} | ${formattedResult[1]} | ${formattedResult[2]} |`;
       let descString = `Giá mỗi lần quay: **200,000 VNĐ**\n\n${resultString}\n\n`;
-      
+
       if (isWin) {
         descString += `🎉 **TRÚNG RỒI!** Bạn nhận được **${formatMoney(winAmount)}** (x${multiplier})`;
       } else {
@@ -2007,7 +2196,9 @@ if (cmd === "maydanhbac") {
         .setDescription(descString)
         .setColor(isWin ? "#00FF00" : "#FF0000");
 
+      row.components.forEach(c => c.setDisabled(true));
       await i.update({ embeds: [resultEmbed], components: [row] });
+      collector.stop();
     }
   });
 
