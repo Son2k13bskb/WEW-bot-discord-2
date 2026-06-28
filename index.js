@@ -475,11 +475,30 @@ if (interaction.isChatInputCommand() && interaction.commandName === "taixiu") {
     }
   }
 
-  const msg = await interaction.reply({ 
-    embeds: [embed], 
-    components: [row1, ...numberRows],
-    fetchReply: true
-  });
+const gameMessage = await interaction.reply({ 
+  embeds: [embed], 
+  components: [row1, ...numberRows],
+  fetchReply: true
+});
+
+// tạo message đếm ngược riêng
+const countdownMsg = await interaction.channel.send({
+  embeds: [
+    new EmbedBuilder()
+      .setTitle("⏳ Đang chờ bắt đầu...")
+      .setDescription("Chuẩn bị quay xúc xắc...")
+      .setColor("#ff9900")
+  ]
+});
+
+activeTaiXiu.set(channelId, {
+  gameId,
+  messageId: gameMessage.id,
+  countdownMessageId: countdownMsg.id, // 👈 lưu thêm cái này
+  channelId,
+  bets: new Map(),
+  isActive: true
+});
 
   activeTaiXiu.set(channelId, {
     gameId,
@@ -620,20 +639,226 @@ async function startTaiXiuCountdown(channel, gameId, channelId) {
 
   const diceEmojis = ["<:xucxac1:1520344245595275326>", "<:xucxac2:1520344312120999946>", "<:xucxac3:1520344344324735066>", "<:xucxac4:1520345499478266027>", "<:xucxac5:1520344386951708672>", "<:xucxac6:1520345521791963136>"];
 
+  let countdownMsg;
+
+  try {
+    countdownMsg = await channel.messages.fetch(game.countdownMessageId);
+  } catch {
+    return;
+  }
+
   for (let i = 45; i >= 0; i--) {
     if (!activeTaiXiu.has(channelId)) break;
+
     const randomDice = diceEmojis[Math.floor(Math.random() * 6)];
-    
+
     const embed = new EmbedBuilder()
-      .setTitle(`🎲 Tài Xỉu - Đang chờ ${randomDice}`)
+      .setTitle(`🎲 Tài Xỉu - ${randomDice}`)
       .setDescription(`⏳ Còn **${i} giây**`)
       .setColor("#ff0000");
 
     try {
-      const msg = await channel.messages.fetch(game.messageId);
-      await msg.edit({ embeds: [embed] });
+      await countdownMsg.edit({ embeds: [embed] });
+    } catch {}
+
+    if (i <= 0) break;
+    await new Promise(r => setTimeout(r, 1000));
+  }
+
+  await resolveTaiXiu(channel, channelId);
+}async function startTaiXiuCountdown(channel, gameId, channelId) {
+  let game = activeTaiXiu.get(channelId);
+  if (!game) return;
+
+  const diceEmojis = ["<:xucxac1:1520344245595275326>", "<:xucxac2:1520344312120999946>", "<:xucxac3:1520344344324735066>", "<:xucxac4:1520345499478266027>", "<:xucxac5:1520344386951708672>", "<:xucxac6:1520345521791963136>"];
+
+  let countdownMsg;
+
+  try {
+    countdownMsg = await channel.messages.fetch(game.countdownMessageId);
+  } catch {
+    return;
+  }
+
+  for (let i = 45; i >= 0; i--) {
+    if (!activeTaiXiu.has(channelId)) break;
+
+    const randomDice = diceEmojis[Math.floor(Math.random() * 6)];
+
+    const embed = new EmbedBuilder()
+      .setTitle(`🎲 Tài Xỉu - ${randomDice}`)
+      .setDescription(`⏳ Còn **${i} giây**`)
+      .setColor("#ff0000");
+
+    try {
+      await countdownMsg.edit({ embeds: [embed] });
+    } catch {}
+
+    if (i <= 0) break;
+    await new Promise(r => setTimeout(r, 1000));
+  }
+
+  await resolveTaiXiu(channel, channelId);
+}async function startTaiXiuCountdown(channel, gameId, channelId) {
+  let game = activeTaiXiu.get(channelId);
+  if (!game) return;
+
+  const diceEmojis = ["<:xucxac1:1520344245595275326>", "<:xucxac2:1520344312120999946>", "<:xucxac3:1520344344324735066>", "<:xucxac4:1520345499478266027>", "<:xucxac5:1520344386951708672>", "<:xucxac6:1520345521791963136>"];
+
+  let countdownMsg;
+
+  try {
+    countdownMsg = await channel.messages.fetch(game.countdownMessageId);
+  } catch {
+    return;
+  }
+
+  for (let i = 45; i >= 0; i--) {
+    if (!activeTaiXiu.has(channelId)) break;
+
+    const randomDice = diceEmojis[Math.floor(Math.random() * 6)];
+
+    const embed = new EmbedBuilder()
+      .setTitle(`🎲 Tài Xỉu - ${randomDice}`)
+      .setDescription(`⏳ Còn **${i} giây**`)
+      .setColor("#ff0000");
+
+    try {
+      await countdownMsg.edit({ embeds: [embed] });
+    } catch {}
+
+    if (i <= 0) break;
+    await new Promise(r => setTimeout(r, 1000));
+  }
+
+  await resolveTaiXiu(channel, channelId);
+}async function startTaiXiuCountdown(channel, gameId, channelId) {
+  let game = activeTaiXiu.get(channelId);
+  if (!game) return;
+
+  const diceEmojis = ["<:xucxac1:1520344245595275326>", "<:xucxac2:1520344312120999946>", "<:xucxac3:1520344344324735066>", "<:xucxac4:1520345499478266027>", "<:xucxac5:1520344386951708672>", "<:xucxac6:1520345521791963136>"];
+
+  let countdownMsg;
+
+  try {
+    countdownMsg = await channel.messages.fetch(game.countdownMessageId);
+  } catch {
+    return;
+  }
+
+  for (let i = 45; i >= 0; i--) {
+    if (!activeTaiXiu.has(channelId)) break;
+
+    const randomDice = diceEmojis[Math.floor(Math.random() * 6)];
+
+    const embed = new EmbedBuilder()
+      .setTitle(`🎲 Tài Xỉu - ${randomDice}`)
+      .setDescription(`⏳ Còn **${i} giây**`)
+      .setColor("#ff0000");
+
+    try {
+      await countdownMsg.edit({ embeds: [embed] });
+    } catch {}
+
+    if (i <= 0) break;
+    await new Promise(r => setTimeout(r, 1000));
+  }
+
+  await resolveTaiXiu(channel, channelId);
+}async function startTaiXiuCountdown(channel, gameId, channelId) {
+  let game = activeTaiXiu.get(channelId);
+  if (!game) return;
+
+  const diceEmojis = ["<:xucxac1:1520344245595275326>", "<:xucxac2:1520344312120999946>", "<:xucxac3:1520344344324735066>", "<:xucxac4:1520345499478266027>", "<:xucxac5:1520344386951708672>", "<:xucxac6:1520345521791963136>"];
+
+  let countdownMsg;
+
+  try {
+    countdownMsg = await channel.messages.fetch(game.countdownMessageId);
+  } catch {
+    return;
+  }
+
+  for (let i = 45; i >= 0; i--) {
+    if (!activeTaiXiu.has(channelId)) break;
+
+    const randomDice = diceEmojis[Math.floor(Math.random() * 6)];
+
+    const embed = new EmbedBuilder()
+      .setTitle(`🎲 Tài Xỉu - ${randomDice}`)
+      .setDescription(`⏳ Còn **${i} giây**`)
+      .setColor("#ff0000");
+
+    try {
+      await countdownMsg.edit({ embeds: [embed] });
+    } catch {}
+
+    if (i <= 0) break;
+    await new Promise(r => setTimeout(r, 1000));
+  }
+
+  await resolveTaiXiu(channel, channelId);
+}async function startTaiXiuCountdown(channel, gameId, channelId) {
+  let game = activeTaiXiu.get(channelId);
+  if (!game) return;
+
+  const diceEmojis = ["<:xucxac1:1520344245595275326>", "<:xucxac2:1520344312120999946>", "<:xucxac3:1520344344324735066>", "<:xucxac4:1520345499478266027>", "<:xucxac5:1520344386951708672>", "<:xucxac6:1520345521791963136>"];
+
+  let countdownMsg;
+
+  try {
+    countdownMsg = await channel.messages.fetch(game.countdownMessageId);
+  } catch {
+    return;
+  }
+
+  for (let i = 45; i >= 0; i--) {
+    if (!activeTaiXiu.has(channelId)) break;
+
+    const randomDice = diceEmojis[Math.floor(Math.random() * 6)];
+
+    const embed = new EmbedBuilder()
+      .setTitle(`🎲 Tài Xỉu - ${randomDice}`)
+      .setDescription(`⏳ Còn **${i} giây**`)
+      .setColor("#ff0000");
+
+    try {
+      await countdownMsg.edit({ embeds: [embed] });
+    } catch {}
+
+    if (i <= 0) break;
+    await new Promise(r => setTimeout(r, 1000));
+  }
+
+  await resolveTaiXiu(channel, channelId);
+}async function startTaiXiuCountdown(channel, gameId, channelId) {
+  let game = activeTaiXiu.get(channelId);
+  if (!game) return;
+
+  const diceEmojis = ["<:xucxac1:1520344245595275326>", "<:xucxac2:1520344312120999946>", "<:xucxac3:1520344344324735066>", "<:xucxac4:1520345499478266027>", "<:xucxac5:1520344386951708672>", "<:xucxac6:1520345521791963136>"];
+
+  let countdownMsg;
+
+  try {
+    countdownMsg = await channel.messages.fetch(game.countdownMessageId);
+  } catch {
+    return;
+  }
+
+  for (let i = 45; i >= 0; i--) {
+    if (!activeTaiXiu.has(channelId)) break;
+
+    const randomDice = diceEmojis[Math.floor(Math.random() * 6)];
+
+    const embed = new EmbedBuilder()
+      .setTitle(`🎲 Tài Xỉu - ${randomDice}`)
+      .setDescription(`⏳ Còn **${i} giây**`)
+      .setColor("#ff0000");
+
+    try {
+      await countdownMsg.edit({ embeds: [embed] });
     } catch (e) {
-      console.log("Lỗi update countdown:", e);
+      console.log("idk:", e)
     }
 
     if (i <= 0) break;
@@ -681,7 +906,12 @@ async function resolveTaiXiu(channel, channelId) {
     .addFields({ name: "📊 Kết quả cược", value: summary || "Không có ai cược" })
     .setColor("#00ff00");
 
-  await channel.send({ embeds: [embed] });
+  try {
+    const countdownMsg = await channel.messages.fetch(game.countdownMessageId);
+    await countdownMsg.edit({ embeds: [embed] }); // 👈 biến thành kết quả luôn
+  } catch {
+    await channel.send({ embeds: [embed] });
+  }
   activeTaiXiu.delete(channelId);
   saveData();
 }
