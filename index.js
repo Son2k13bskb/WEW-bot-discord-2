@@ -35,6 +35,17 @@ function formatMoney(num) {
   return Math.floor(num).toLocaleString("vi-VN") + " VNĐ";
 }
 
+function formatBetType(type) {
+  if (type.startsWith("num_")) {
+    return `SỐ ${type.split("_")[1]}`;
+  }
+  if (type === "tai") return "TÀI";
+  if (type === "xiu") return "XỈU";
+  if (type === "chan") return "CHẴN";
+  if (type === "le") return "LẺ";
+  return type.toUpperCase();
+}
+
 async function findGlobalUser(client, input) {
     if (!input) return null;
     
@@ -464,7 +475,11 @@ if (interaction.isChatInputCommand() && interaction.commandName === "taixiu") {
     }
   }
 
-  const msg = await interaction.reply({ embeds: [embed], components: [row1, ...numberRows] });
+  const msg = await interaction.reply({ 
+    embeds: [embed], 
+    components: [row1, ...numberRows],
+    fetchReply: true
+  });
 
   activeTaiXiu.set(channelId, {
     gameId,
@@ -576,7 +591,14 @@ if (interaction.isModalSubmit()) {
 
 // Xử lý khi người dùng bấm nút (Mở Modal)
     if (interaction.isButton()) {
-      const betType = customId.split("_")[1];
+      const parts = customId.split("_");
+      let betType;
+
+      if (parts[1] === "num") {
+        betType = `num_${parts[2]}`;
+      } else {
+        betType = parts[1];
+      }
       const modal = new ModalBuilder()
         .setCustomId(`tx_bet_${betType}_${gameId}`)
         .setTitle(`Nhập tiền cược (${betType.toUpperCase()})`);
@@ -610,7 +632,10 @@ async function startTaiXiuCountdown(channel, gameId, channelId) {
     try {
       const msg = await channel.messages.fetch(game.messageId);
       await msg.edit({ embeds: [embed] });
-    } catch (e) {}
+    } catch (e) {
+      console.log("Lỗi update countdown:", e);
+    }
+
     if (i <= 0) break;
     await new Promise(r => setTimeout(r, 1000));
   }
@@ -638,12 +663,15 @@ async function resolveTaiXiu(channel, channelId) {
                 (bet.type === "chan" && isChan) || (bet.type === "le" && !isChan) ||
                 (bet.type.startsWith("num") && parseInt(bet.type.slice(3)) === sum);
 
+    const betLabel = formatBetType(bet.type);
+
     if (isWin) {
       const win = bet.amount * 2;
       money.set(userId, (money.get(userId)||0) + win);
-      summary += `✅ **@${name}** cược **${formatMoney(bet.amount)}** → **THẮNG** +${formatMoney(win)}\n`;
+
+      summary += `✅ **@${name}** cược **${formatMoney(bet.amount)}** vào **${betLabel}** → **THẮNG** +${formatMoney(win)}\n`;
     } else {
-      summary += `❌ **@${name}** cược **${formatMoney(bet.amount)}** → **TOẠCH**\n`;
+      summary += `❌ **@${name}** cược **${formatMoney(bet.amount)}** vào **${betLabel}** → **TOẠCH**\n`;
     }
   }
 
