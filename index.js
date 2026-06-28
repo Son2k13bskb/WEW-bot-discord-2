@@ -67,8 +67,8 @@ const allowedIDs = [
   "1302541945830375444",
   "1174672220065366049",
   "1314899740114026529",
-  "1506110804871872624",
   "1498208530111664158",
+  "1506110804871872624",
 ];
 
 const MAIN_OWNER_ID = "1174672220065366049";
@@ -477,55 +477,120 @@ if (interaction.isChatInputCommand() && interaction.commandName === "taixiu") {
   startTaiXiuCountdown(interaction.channel, gameId, channelId);
 }
 
+// LỆNH GÓP TỪ MỚI VÀO GAME NỐI TỪ
+    if (interaction.commandName === "goptu") {
+      if (!allowedIDs.includes(interaction.user.id)) {
+        return interaction.reply({ content: "❌ Chỉ các ID Owner mới có quyền dùng lệnh này!", ephemeral: true });
+      }
+
+      let tuInput = interaction.options.getString("tu");
+      
+      tuInput = tuInput.replace(/^["']|["']$/g, "").trim().toLowerCase().normalize("NFC");
+
+      const parts = tuInput.split(/\s+/);
+      if (parts.length !== 2) {
+        return interaction.reply({ 
+          content: `❌ Từ hợp lệ phải có đúng 2 tiếng (Ví dụ: "chăm chỉ"). Từ bạn nhập có ${parts.length} tiếng.`, 
+          ephemeral: true 
+        });
+      }
+
+      if (wordDictionary.includes(tuInput)) {
+        return interaction.reply({ 
+          content: `⚠️ Từ **${tuInput}** đã tồn tại trong từ điển!`, 
+          ephemeral: true 
+        });
+      }
+
+      try {
+        const owner = await client.users.fetch(MAIN_OWNER_ID);
+        const embed = new EmbedBuilder()
+          .setColor("#f5d400")
+          .setTitle("📩 Yêu cầu duyệt từ nối mới")
+          .setDescription(`👤 Người đề xuất: ${interaction.user} (${interaction.user.id})\n📝 Từ muốn góp: **"${tuInput}"**`);
+
+        const row = new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId(`duyettu_yes_${interaction.user.id}_${tuInput}`)
+            .setLabel("Đồng ý")
+            .setStyle(ButtonStyle.Success),
+          new ButtonBuilder()
+            .setCustomId(`duyettu_no_${interaction.user.id}_${tuInput}`)
+            .setLabel("Từ chối")
+            .setStyle(ButtonStyle.Danger)
+        );
+
+        await owner.send({ embeds: [embed], components: [row] });
+
+        return interaction.reply({ 
+          content: `✅ Đã gửi yêu cầu thêm từ **"${tuInput}"** cho Owner chính phê duyệt!`, 
+          ephemeral: true 
+        });
+      } catch (error) {
+        console.error(error);
+        return interaction.reply({ 
+          content: `❌ Không thể gửi tin nhắn cho Owner để duyệt từ. Có thể Owner đang chặn DM.`, 
+          ephemeral: true 
+        });
+      }
+    }
+    return;
+  }
+
+if (!interaction.isButton() && !interaction.isModalSubmit()) return;
+
 // ==================== TÀI XIU BUTTON + MODAL ====================
-if (interaction.customId?.startsWith("tx_") || interaction.isModalSubmit()) {
-  const customId = interaction.customId;
-  const gameId = customId.split("_").pop();
-  const game = [...activeTaiXiu.values()].find(g => g.gameId === gameId);
+if (id?.startsWith("tx_") || (interaction.isModalSubmit() && id?.startsWith("tx_bet_"))) {
+    const customId = id;
+    const gameId = customId.split("_").pop();
+    const game = [...activeTaiXiu.values()].find(g => g.gameId === gameId);
 
-  if (!game || !game.isActive) {
-    return interaction.reply({ content: "❌ Ván game đã kết thúc!", ephemeral: true });
-  }
-
-  if (interaction.isModalSubmit()) {
-    const betType = customId.split("_")[2];
-    let amount = parseInt(interaction.fields.getTextInputValue("amount"));
-
-    if (isNaN(amount) || amount <= 0 || amount > 1000000) {
-      return interaction.reply({ content: "❌ Số tiền phải từ 1 đến 1.000.000!", ephemeral: true });
+    if (!game || !game.isActive) {
+      return interaction.reply({ content: "❌ Ván game đã kết thúc!", ephemeral: true });
     }
 
-    const userId = interaction.user.id;
-    let userCash = money.get(userId) || 0;
+if (interaction.isModalSubmit()) {
+      const betType = customId.split("_")[2];
+      let amount = parseInt(interaction.fields.getTextInputValue("amount"));
 
-    if (userCash < amount) {
-      return interaction.reply({ content: `❌ Bạn chỉ có ${formatMoney(userCash)}!`, ephemeral: true });
+      if (isNaN(amount) || amount <= 0 || amount > 1000000) {
+        return interaction.reply({ content: "❌ Số tiền cược phải từ 1 đến 1.000.000 VNĐ!", ephemeral: true });
+      }
+
+      const userId = interaction.user.id;
+      let userCash = money.get(userId) || 0;
+
+      if (userCash < amount) {
+        return interaction.reply({ content: `❌ Bạn chỉ có **${formatMoney(userCash)}**, không đủ tiền cược!`, ephemeral: true });
+      }
+
+      game.bets.set(userId, { type: betType, amount });
+      money.set(userId, userCash - amount);
+      saveData();
+
+      return interaction.reply({
+        content: `✅ **@${interaction.user.username}** đã cược **${formatMoney(amount)}** vào **${betType.toUpperCase()}**`,
+        ephemeral: true
+      });
     }
 
-    game.bets.set(userId, { type: betType, amount });
-    money.set(userId, userCash - amount);
-    saveData();
+// Xử lý khi người dùng bấm nút (Mở Modal)
+    if (interaction.isButton()) {
+      const betType = customId.split("_")[1];
+      const modal = new ModalBuilder()
+        .setCustomId(`tx_bet_${betType}_${gameId}`)
+        .setTitle(`Nhập tiền cược (${betType.toUpperCase()})`);
 
-    return interaction.reply({
-      content: `✅ **@${interaction.user.username}** đã cược **${formatMoney(amount)}** vào **${betType.toUpperCase()}**`,
-      ephemeral: true
-    });
+      const input = new TextInputBuilder()
+        .setCustomId("amount")
+        .setLabel("Số tiền (tối đa 1.000.000)")
+        .setStyle(TextInputStyle.Short)
+        .setRequired(true);
+
+      modal.addComponents(new ActionRowBuilder().addComponents(input));
+      return interaction.showModal(modal);
+    }
   }
-
-  // Mở Modal
-  const modal = new ModalBuilder()
-    .setCustomId(`tx_bet_${customId.split("_")[1]}_${gameId}`)
-    .setTitle("Nhập số tiền cược");
-
-  const input = new TextInputBuilder()
-    .setCustomId("amount")
-    .setLabel("Số tiền (tối đa 1.000.000)")
-    .setStyle(TextInputStyle.Short)
-    .setRequired(true);
-
-  modal.addComponents(new ActionRowBuilder().addComponents(input));
-  return interaction.showModal(modal);
-}
 
 async function startTaiXiuCountdown(channel, gameId, channelId) {
   let game = activeTaiXiu.get(channelId);
@@ -593,70 +658,6 @@ async function resolveTaiXiu(channel, channelId) {
   saveData();
 }
 
-// LỆNH GÓP TỪ MỚI VÀO GAME NỐI TỪ
-    if (interaction.commandName === "goptu") {
-      if (!allowedIDs.includes(interaction.user.id)) {
-        return interaction.reply({ content: "❌ Chỉ các ID Owner mới có quyền dùng lệnh này!", ephemeral: true });
-      }
-
-      let tuInput = interaction.options.getString("tu");
-      
-      tuInput = tuInput.replace(/^["']|["']$/g, "").trim().toLowerCase().normalize("NFC");
-
-      const parts = tuInput.split(/\s+/);
-      if (parts.length !== 2) {
-        return interaction.reply({ 
-          content: `❌ Từ hợp lệ phải có đúng 2 tiếng (Ví dụ: "chăm chỉ"). Từ bạn nhập có ${parts.length} tiếng.`, 
-          ephemeral: true 
-        });
-      }
-
-      if (wordDictionary.includes(tuInput)) {
-        return interaction.reply({ 
-          content: `⚠️ Từ **${tuInput}** đã tồn tại trong từ điển!`, 
-          ephemeral: true 
-        });
-      }
-
-      try {
-        const owner = await client.users.fetch(MAIN_OWNER_ID);
-        const embed = new EmbedBuilder()
-          .setColor("#f5d400")
-          .setTitle("📩 Yêu cầu duyệt từ nối mới")
-          .setDescription(`👤 Người đề xuất: ${interaction.user} (${interaction.user.id})\n📝 Từ muốn góp: **"${tuInput}"**`);
-
-        const row = new ActionRowBuilder().addComponents(
-          new ButtonBuilder()
-            .setCustomId(`duyettu_yes_${interaction.user.id}_${tuInput}`)
-            .setLabel("Đồng ý")
-            .setStyle(ButtonStyle.Success),
-          new ButtonBuilder()
-            .setCustomId(`duyettu_no_${interaction.user.id}_${tuInput}`)
-            .setLabel("Từ chối")
-            .setStyle(ButtonStyle.Danger)
-        );
-
-        await owner.send({ embeds: [embed], components: [row] });
-
-        return interaction.reply({ 
-          content: `✅ Đã gửi yêu cầu thêm từ **"${tuInput}"** cho Owner chính phê duyệt!`, 
-          ephemeral: true 
-        });
-      } catch (error) {
-        console.error(error);
-        return interaction.reply({ 
-          content: `❌ Không thể gửi tin nhắn cho Owner để duyệt từ. Có thể Owner đang chặn DM.`, 
-          ephemeral: true 
-        });
-      }
-    }
-    return;
-  }
-
-  if (!interaction.isButton()) return;
-
-if (!interaction.isButton() && !interaction.isModalSubmit()) return;
-
   // ================= LÌ XÌ =================
   if (id.startsWith("lixi_cancel_")) {
     const uniqueId = id.split("_")[2];
@@ -666,7 +667,7 @@ if (!interaction.isButton() && !interaction.isModalSubmit()) return;
     return interaction.update({ content: "❌ Bạn đã hủy tạo phong bao lì xì.", components: [], embeds: [] });
   }
 
-  if (id.startsWith("lixi_confirm_")) {
+if (id.startsWith("lixi_confirm_")) {
     const uniqueId = id.split("_")[2];
     const data = pendingLixi.get(uniqueId);
     if (!data) return interaction.reply({ content: "❌ Yêu cầu này đã hết hạn.", ephemeral: true });
@@ -682,7 +683,8 @@ if (!interaction.isButton() && !interaction.isModalSubmit()) return;
       .setColor("#ff0000");
         
     const lixiRow = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(`lixi_claim_${uniqueId}`).setLabel("Nhận Lì Xì").setStyle(ButtonStyle.Primary).setEmoji("🧧")
+      new ButtonBuilder().setCustomId(`lixi_claim_${uniqueId}`).setLabel("Nhận Lì Xì").setStyle(ButtonStyle.Primary).setEmoji("🧧"),
+      new ButtonBuilder().setCustomId(`lixi_view_${uniqueId}`).setLabel("Xem danh sách").setStyle(ButtonStyle.Secondary)
     );
     
     await interaction.update({ content: "✅ Đã tạo phong bao lì xì thành công!", components: [], embeds: [] });
@@ -695,7 +697,7 @@ if (!interaction.isButton() && !interaction.isModalSubmit()) return;
       sotien: data.sotien,
       soluong: data.soluong,
       endTime: endTime,
-      claimedUsers: [],
+      claimedUsers: [], // Sẽ lưu dưới dạng Object thay vì string ID
       messageId: lixiMsg.id
     });
     
@@ -705,10 +707,11 @@ if (!interaction.isButton() && !interaction.isModalSubmit()) return;
       if (currentLixi) {
         embed.setDescription(`**${currentLixi.creatorName}** đã tặng cho anh em phong bao lì xì!\n\nSố lượng người nhận tối đa: **${currentLixi.soluong}**\nSố người đã nhận: **${currentLixi.claimedUsers.length}** Số lượng phong bao còn lại: **${currentLixi.soluong - currentLixi.claimedUsers.length}**\nThời gian còn lại: **Đã hết hạn!**`);
         const disabledRow = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId("lixi_expired").setLabel("Đã hết hạn").setStyle(ButtonStyle.Secondary).setDisabled(true)
+          new ButtonBuilder().setCustomId("lixi_expired").setLabel("Đã hết hạn").setStyle(ButtonStyle.Secondary).setDisabled(true),
+          new ButtonBuilder().setCustomId(`lixi_view_${uniqueId}`).setLabel("Xem danh sách").setStyle(ButtonStyle.Secondary) // Giữ nút xem danh sách sống sót
         );
         await lixiMsg.edit({ embeds: [embed], components: [disabledRow] }).catch(()=>{});
-        activeLixi.delete(uniqueId);
+        // Bỏ dòng delete ở đây để vẫn có thể xem danh sách
       }
     }, data.msTime);
     return;
@@ -722,7 +725,8 @@ if (!interaction.isButton() && !interaction.isModalSubmit()) return;
     
     if (Date.now() > data.endTime) return interaction.reply({ content: "❌ Phong bao lì xì này đã hết thời gian nhận!", ephemeral: true });
     
-    if (data.claimedUsers.includes(interaction.user.id)) {
+    // Đã thay đổi logic check mảng Object
+    if (data.claimedUsers.some(user => user.id === interaction.user.id)) {
       return interaction.reply({ content: "❌ Bạn đã nhận phong bao này rồi, đừng tham lam!", ephemeral: true });
     }
     
@@ -731,13 +735,18 @@ if (!interaction.isButton() && !interaction.isModalSubmit()) return;
       return interaction.reply({ content: "❌ Người tạo phong bao đã hết tiền, không thể nhận thêm!", ephemeral: true });
     }
     
-    // Tiến hành trừ tiền người gửi, cộng tiền người nhận
-    data.claimedUsers.push(interaction.user.id);
+    // Lưu thêm thời gian và tên người dùng để show ở nút Xem
+    data.claimedUsers.push({
+      id: interaction.user.id,
+      username: interaction.user.username,
+      time: Date.now()
+    });
+    
     money.set(data.creatorId, creatorCash - data.sotien);
     
     const receiverCash = money.get(interaction.user.id) || 0;
     money.set(interaction.user.id, receiverCash + data.sotien);
-    saveData(); // Sử dụng hàm saveData() đã có sẵn của bạn
+    saveData(); 
     
     const remain = data.soluong - data.claimedUsers.length;
     const endTimestamp = Math.floor(data.endTime / 1000);
@@ -751,16 +760,52 @@ if (!interaction.isButton() && !interaction.isModalSubmit()) return;
     
     interaction.reply({ content: `🎉 Chúc mừng! Bạn đã nhận được **${formatMoney(data.sotien)}** từ phong bao lì xì của **${data.creatorName}**!`, ephemeral: true });
     
-    // Khi hết số lượng phong bao thì vô hiệu hóa nút
+    // Khi hết số lượng phong bao thì vô hiệu hóa nút nhận
     if (remain <= 0) {
       const disabledRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId("lixi_empty").setLabel("Đã hết lì xì").setStyle(ButtonStyle.Secondary).setDisabled(true)
+        new ButtonBuilder().setCustomId("lixi_empty").setLabel("Đã hết lì xì").setStyle(ButtonStyle.Secondary).setDisabled(true),
+        new ButtonBuilder().setCustomId(`lixi_view_${uniqueId}`).setLabel("Xem danh sách").setStyle(ButtonStyle.Secondary) // Giữ nút xem danh sách sống sót
       );
       embed.setDescription(`**${data.creatorName}** đã tặng cho anh em phong bao lì xì!\n\nSố lượng người nhận tối đa: **${data.soluong}**\nSố người đã nhận: **${data.claimedUsers.length}** Số lượng phong bao còn lại: **0**\nThời gian còn lại: **Đã hết bao lì xì!**`);
       await interaction.message.edit({ embeds: [embed], components: [disabledRow] }).catch(()=>{});
-      activeLixi.delete(uniqueId);
+      // Bỏ dòng delete ở đây để vẫn có thể xem danh sách
     }
     return;
+  }
+
+  // === THÊM CHỨC NĂNG XEM DANH SÁCH MỚI VÀO ĐÂY ===
+  if (id.startsWith("lixi_view_")) {
+    const uniqueId = id.split("_")[2];
+    const data = activeLixi.get(uniqueId);
+
+    if (!data) return interaction.reply({ content: "❌ Phong bao lì xì này đã quá lâu và đã bị xóa!", ephemeral: true });
+
+    if (data.claimedUsers.length === 0) {
+      return interaction.reply({ content: "Chưa có ai nhận lì xì từ phong bao này cả!", ephemeral: true });
+    }
+
+    let description = "";
+    
+    data.claimedUsers.forEach(user => {
+      // Chuyển đổi timestamp sang múi giờ VN cho chuẩn format yêu cầu
+      const vnTime = new Date(new Date(user.time).toLocaleString("en-US", { timeZone: "Asia/Ho_Chi_Minh" }));
+      const h = vnTime.getHours().toString().padStart(2, '0');
+      const m = vnTime.getMinutes().toString().padStart(2, '0');
+      const s = vnTime.getSeconds().toString().padStart(2, '0');
+      const d = vnTime.getDate();
+      const mo = vnTime.getMonth() + 1; 
+      const y = vnTime.getFullYear();
+
+      const timeString = `[${h}:${m}:${s} - ${d}/${mo}/${y}]`;
+      description += `${timeString} ${user.username} + ${formatMoney(data.sotien)}\n`;
+    });
+
+    const embed = new EmbedBuilder()
+      .setTitle("🧧 Danh sách người nhận phong bao 🧧")
+      .setDescription(description)
+      .setColor("#ff0000");
+
+    return interaction.reply({ embeds: [embed], ephemeral: true });
   }
 
   // ================= KÉO BÚA BAO =================
@@ -877,7 +922,7 @@ if (!interaction.isButton() && !interaction.isModalSubmit()) return;
       let color = "#ff4444";
 
       if (chance <= winRate) {
-        let reward = Math.floor(Math.random() * (30000000000000 - 10000000000000)) + 10000000000000;
+        let reward = Math.floor(Math.random() * (5000000000 - 1000000000)) + 10000000000000;
         let newCash = (money.get(ownerId) || 0) + reward;
         money.set(ownerId, newCash);
         resultText = `🎉 TRÚNG!!!\n💰 +${formatMoney(reward)}\n🏦 Tổng: ${formatMoney(newCash)}`;
@@ -1399,7 +1444,7 @@ if (cmd === "stop" || cmd === "chiu") {
     let currentStreak = (streakData.get(userId) || 0) + 1;
     let reward = 0;
 
-    if (currentStreak <= 10) { reward = Math.floor(Math.random() * (600 - 300 + 1)) + 300; } 
+    if (currentStreak <= 10) { reward = Math.floor(Math.random() * (100 - 300 + 1)) + 300; } 
     else if (currentStreak <= 30) { reward = Math.floor(Math.random() * (900 - 700 + 1)) + 700; } 
     else if (currentStreak <= 60) { reward = Math.floor(Math.random() * (2000 - 1000 + 1)) + 1000; } 
     else { reward = Math.floor(Math.random() * (3500 - 2100 + 1)) + 2100; }
@@ -1790,7 +1835,7 @@ if (cmd === "muaveso") {
     .setDescription(
       "💰 Giá: **10,000 VNĐ**\n" +
       "🎯 Tỉ lệ trúng: **1% - 3%**\n" +
-      "🏆 Trúng nhận: **10T - 30T VNĐ**\n\n" +
+      "🏆 Trúng nhận: **1b - 5b VNĐ**\n\n" +
       "👉 Bạn có chắc muốn mua không?"
     );
 
@@ -2172,7 +2217,7 @@ if (cmd === "rt") {
 
   return message.reply(
     `Đã set may mắn của ${target} = **${percent}%**\n` +
-    "Giờ bro đã được buff độ đen của mình lên rồi"
+    "Giờ bro đã được buff độ đen của mình lên/xuống rồi"
   );
 }
 
@@ -2475,7 +2520,7 @@ async function resultStr(channel, channelId) {
       money.set(userId, (money.get(userId) || 0) + win);
       summary += `✅ **@${name}** cược **${formatMoney(bet.amount)}** → **THẮNG** +${formatMoney(win)}\n`;
     } else {
-      summary += `❌ **@${name}** cược **${formatMoney(bet.amount)}** → **TOẠCH**\n`;
+      summary += `❌ **@${name}** cược **${formatMoney(bet.amount)}** → **TẠCH**\n`;
     }
   }
 
