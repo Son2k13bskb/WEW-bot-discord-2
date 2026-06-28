@@ -625,8 +625,8 @@ async function startTaiXiuCountdown(channel, gameId, channelId) {
     const randomDice = diceEmojis[Math.floor(Math.random() * 6)];
     
     const embed = new EmbedBuilder()
-      .setTitle(`🎲 Tài Xỉu - Đang chờ ${randomDice}`)
-      .setDescription(`⏳ Còn **${i} giây**`)
+      .setTitle(`🎲 Tài Xỉu WEW - Nhà cái Châu Chấu! 🔥\n🎲 Tài Xỉu - Đang chờ ${randomDice}`)
+      .setDescription(`Chọn loại cược 👇\n⏳ Còn **${i} giây**`)
       .setColor("#ff0000");
 
     try {
