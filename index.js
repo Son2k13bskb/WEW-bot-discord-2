@@ -1354,6 +1354,38 @@ client.on("messageCreate", async (message) => {
     saveData(); 
   }
 
+  // LỆNH CHAT QUA KÊNH (CHỈ CHẠY TRONG DMS CỦA OWNER)
+  if (cmd === "chatkenh") {
+    // 1. Lệnh này sẽ chỉ chat riêng (dms) mới hoạt động, ở kênh server sẽ không có chuyện gì xảy ra
+    if (message.guild) return;
+
+    // 2. Lệnh này chỉ dùng cho các id người dùng có trong danh sách allowedIDs (owner)
+    if (!allowedIDs.includes(message.author.id)) return;
+
+    const channelId = args[0];
+    const contentToSend = args.slice(1).join(" ");
+
+    if (!channelId || !contentToSend) {
+      return message.reply("⚠️ Vui lòng nhập đúng định dạng: `wew chatkenh (id kênh) (nội dung)`");
+    }
+
+    try {
+      // 3. Kiểm tra xem bot có trong server của kênh đó không (hoặc ID kênh có đúng không)
+      const targetChannel = await client.channels.fetch(channelId).catch(() => null);
+      
+      if (!targetChannel) {
+        return message.reply("❌ Bot không trong server hoặc ID không đúng!");
+      }
+
+      // 4. Nếu có trong server thì chat vào đúng kênh đấy lời nói mà người dùng đã viết
+      await targetChannel.send(contentToSend);
+      await message.reply(`✅ Đã gửi tin nhắn đến kênh thành công!`);
+    } catch (error) {
+      console.error(error);
+      return message.reply("❌ Bot không trong server hoặc ID không đúng!");
+    }
+  }
+
   // ================= LỆNH SÀN ĐUA NGỰA =================
   if (cmd === "sanduangua") {
     if (args.length < 2) {
