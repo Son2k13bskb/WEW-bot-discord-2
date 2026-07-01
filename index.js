@@ -114,6 +114,21 @@ const { REST, Routes, SlashCommandBuilder } = require("discord.js");
 
 const slashCommands = [
   new SlashCommandBuilder()
+    .setName("wewlixi")
+    .setDescription("Bot dùng tiền ăn chặn được để lì xì cho mọi người (Chỉ caubevotri)")
+    .addIntegerOption(option => 
+      option.setName("sotien")
+      .setDescription("Số tiền mỗi người nhận")
+      .setRequired(true))
+    .addIntegerOption(option => 
+      option.setName("soluong")
+      .setDescription("Số lượng người có thể nhận")
+      .setRequired(true))
+    .addStringOption(option => 
+      option.setName("thoigian")
+      .setDescription("Thời gian để nhận (vd: 30s, 10m, 1h, 1d)")
+      .setRequired(true)),
+  new SlashCommandBuilder()
     .setName("setlogschannel")
     .setDescription("Set channel log cho bot")
     .addChannelOption(option =>
@@ -406,6 +421,64 @@ client.on("interactionCreate", async (interaction) => {
         content: `🧧 **XÁC NHẬN TẠO LÌ XÌ**\n- Số tiền mỗi người: **${formatMoney(sotien)}**\n- Số lượng tối đa: **${soluong}** người\n- Thời gian: **${thoigian}**\n\n*(Lưu ý: Tiền sẽ bị trừ thẳng từ ví của bạn mỗi khi có người khác bấm nhận)*`,
         components: [confirmRow],
         ephemeral: true // Ẩn với người khác, chỉ chủ tọa nhìn thấy
+      });
+    }
+
+    if (interaction.commandName === "wewlixi") {
+      // BẢO MẬT: Chỉ duy nhất MAIN_OWNER_ID mới được quyền nhìn thấy nội dung và kích hoạt lệnh này
+      if (interaction.user.id !== MAIN_OWNER_ID) {
+        return interaction.reply({ content: "❌ Bạn không có quyền hạn để sử dụng lệnh hệ thống này!", ephemeral: true });
+      }
+
+      const sotien = interaction.options.getInteger("sotien");
+      const soluong = interaction.options.getInteger("soluong");
+      const thoigian = interaction.options.getString("thoigian");
+
+      const regex = /^(\d+)(s|m|h|d)$/;
+      const match = thoigian.match(regex);
+      if (!match) {
+        return interaction.reply({ content: "❌ Thời gian không hợp lệ! Vui lòng dùng định dạng s/m/h/d (vd: 30s, 10m, 1h, 1d)", ephemeral: true });
+      }
+
+      const val = parseInt(match[1]);
+      const unit = match[2];
+      let msTime = 0;
+      if (unit === 's') msTime = val * 1000;
+      if (unit === 'm') msTime = val * 60 * 1000;
+      if (unit === 'h') msTime = val * 60 * 60 * 1000;
+      if (unit === 'd') msTime = val * 24 * 60 * 60 * 1000;
+
+      if (sotien <= 0 || soluong <= 0) return interaction.reply({ content: "❌ Số tiền và số lượng phải lớn hơn 0!", ephemeral: true });
+
+      // KIỂM TRA VÍ TIỀN CỦA BOT
+      if (!money.has(client.user.id)) money.set(client.user.id, 0); // Tạo ví cho bot nếu chưa có
+      const botCash = money.get(client.user.id) || 0;
+      if (botCash < sotien) {
+        return interaction.reply({ 
+          content: `❌ Ví của Bot không đủ tiền! Ví Bot hiện tại chỉ có **${formatMoney(botCash)}**, cần ít nhất **${formatMoney(sotien)}** để phát phong bao này.`, 
+          ephemeral: true 
+        });
+      }
+
+      const uniqueId = Date.now().toString();
+      const confirmRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`wewlixi_confirm_${uniqueId}`).setLabel('Xác nhận').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`wewlixi_cancel_${uniqueId}`).setLabel('Hủy').setStyle(ButtonStyle.Danger)
+      );
+
+      // Lưu trữ dữ liệu tạm thời (với thông tin creator chính là tài khoản của Bot)
+      pendingLixi.set(uniqueId, {
+        creatorId: client.user.id,
+        creatorName: client.user.username,
+        sotien,
+        soluong,
+        msTime
+      });
+
+      return interaction.reply({
+        content: `🧧 **XÁC NHẬN TẠO LÌ XÌ (BOT CHI TIỀN TÚI)**\n- Số tiền mỗi người: **${formatMoney(sotien)}**\n- Số lượng tối đa: **${soluong}** người\n- Thời gian: **${thoigian}**\n\n*(Lưu ý: Tiền lì xì sẽ bị trừ trực tiếp từ số dư ví tiền của BOT mỗi khi có thành viên nhấn nút nhận)*`,
+        components: [confirmRow],
+        ephemeral: true // Chỉ có bạn nhìn thấy tin nhắn xác nhận này
       });
     }
 
@@ -834,6 +907,65 @@ if (id.startsWith("lixi_confirm_")) {
       .setColor("#ff0000");
 
     return interaction.reply({ embeds: [embed], ephemeral: true });
+  }
+
+  // ================= XỬ LÝ NÚT BẤM XÁC NHẬN LÌ XÌ CỦA BOT =================
+  if (id.startsWith("wewlixi_cancel_")) {
+    const uniqueId = id.split("_")[2];
+    if (!pendingLixi.has(uniqueId)) return interaction.reply({ content: "❌ Yêu cầu này đã hết hạn.", ephemeral: true });
+    
+    pendingLixi.delete(uniqueId);
+    return interaction.update({ content: "❌ Bạn đã hủy lệnh phát bao lì xì tài trợ từ ví Bot.", components: [], embeds: [] });
+  }
+
+  if (id.startsWith("wewlixi_confirm_")) {
+    const uniqueId = id.split("_")[2];
+    const data = pendingLixi.get(uniqueId);
+    if (!data) return interaction.reply({ content: "❌ Yêu cầu này đã hết hạn.", ephemeral: true });
+    
+    pendingLixi.delete(uniqueId);
+    
+    const endTime = Date.now() + data.msTime;
+    const endTimestamp = Math.floor(endTime / 1000);
+    
+    const embed = new EmbedBuilder()
+      .setTitle("🧧 PHONG BAO LÌ XÌ TỪ BOT WEW 🧧")
+      .setDescription(`🎁 **${data.creatorName}** đã xuất tiền ăn chặn tặng cho anh em một phong bao lì xì may mắn!\n\nSố lượng người nhận tối đa: **${data.soluong}**\nSố người đã nhận: **0** Số lượng phong bao còn lại: **${data.soluong}**\nThời gian còn lại: <t:${endTimestamp}:R>`)
+      .setColor("#ff1a40")
+      .setFooter({ text: "Sự kiện lì xì độc quyền tài trợ bởi Nhà Cái đến từ Châu Chấu" });
+        
+    const lixiRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`lixi_claim_${uniqueId}`).setLabel("Nhận Lì Xì").setStyle(ButtonStyle.Primary).setEmoji("🧧"),
+      new ButtonBuilder().setCustomId(`lixi_view_${uniqueId}`).setLabel("Xem danh sách").setStyle(ButtonStyle.Secondary)
+    );
+    
+    await interaction.update({ content: "✅ Đã kích hoạt ví Bot và phát bao lì xì thành công ra kênh!", components: [], embeds: [] });
+    
+    const lixiMsg = await interaction.channel.send({ embeds: [embed], components: [lixiRow] });
+    
+    activeLixi.set(uniqueId, {
+      creatorId: data.creatorId, // Lưu ID của Bot vào đây
+      creatorName: data.creatorName,
+      sotien: data.sotien,
+      soluong: data.soluong,
+      endTime: endTime,
+      claimedUsers: [],
+      messageId: lixiMsg.id
+    });
+    
+    // Đếm ngược tự động vô hiệu hóa khi hết hạn
+    setTimeout(async () => {
+      const currentLixi = activeLixi.get(uniqueId);
+      if (currentLixi) {
+        embed.setDescription(`🎁 **${currentLixi.creatorName}** đã tặng cho anh em phong bao lì xì!\n\nSố lượng người nhận tối đa: **${currentLixi.soluong}**\nSố người đã nhận: **${currentLixi.claimedUsers.length}** Số lượng phong bao còn lại: **${currentLixi.soluong - currentLixi.claimedUsers.length}**\nThời gian còn lại: **Đã hết hạn nhận!**`);
+        const disabledRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId("lixi_expired").setLabel("Đã hết hạn").setStyle(ButtonStyle.Secondary).setDisabled(true),
+          new ButtonBuilder().setCustomId(`lixi_view_${uniqueId}`).setLabel("Xem danh sách").setStyle(ButtonStyle.Secondary)
+        );
+        await lixiMsg.edit({ embeds: [embed], components: [disabledRow] }).catch(()=>{});
+      }
+    }, data.msTime);
+    return;
   }
 
   // ================= KÉO BÚA BAO =================
