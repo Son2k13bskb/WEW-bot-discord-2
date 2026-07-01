@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, AttachmentBuilder } = require('discord.js');
+const { Client, GatewayIntentBits, Partials, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, AttachmentBuilder } = require('discord.js');
 const BACKUP_CHANNEL_ID = "1517914977992708138";
 
 function parseBet(input, userCash) {
@@ -68,7 +68,15 @@ async function findGlobalUser(client, input) {
 }
 
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent]
+  intents: [
+    GatewayIntentBits.Guilds, 
+    GatewayIntentBits.GuildMessages, 
+    GatewayIntentBits.MessageContent,
+    GatewayIntentBits.DirectMessages // Bật quyền nhận tin nhắn riêng
+  ],
+  partials: [
+    Partials.Channel // Nhận tin nhắn từ các kênh DM chưa được cache
+  ]
 });
 
 const PREFIX = "wew";
