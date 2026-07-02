@@ -32,7 +32,7 @@ const debts = new Map();
 const fs = require('fs');
 
 function formatMoney(num) {
-  return Math.floor(num).toLocaleString("vi-VN") + " VNĐ";
+  return Math.floor(num).toLocaleString("vi-VN") + " <:ShinCoin:1522156112055635968>";
 }
 
 function formatBetType(type) {
@@ -123,10 +123,10 @@ const { REST, Routes, SlashCommandBuilder } = require("discord.js");
 const slashCommands = [
   new SlashCommandBuilder()
     .setName("wewlixi")
-    .setDescription("Bot dùng tiền ăn chặn được để lì xì cho mọi người (Chỉ caubevotri)")
+    .setDescription("Bot dùng <:ShinCoin:1522156112055635968> ăn chặn được để lì xì cho mọi người (Chỉ caubevotri)")
     .addIntegerOption(option => 
       option.setName("sotien")
-      .setDescription("Số tiền mỗi người nhận")
+      .setDescription("Số <:ShinCoin:1522156112055635968> mỗi người nhận")
       .setRequired(true))
     .addIntegerOption(option => 
       option.setName("soluong")
@@ -163,7 +163,7 @@ const slashCommands = [
     .setDescription("Tạo phong bao lì xì cho mọi người")
     .addIntegerOption(option => 
       option.setName("sotien")
-      .setDescription("Số tiền mỗi người nhận")
+      .setDescription("Số <:ShinCoin:1522156112055635968> mỗi người nhận")
       .setRequired(true))
     .addIntegerOption(option => 
       option.setName("soluong")
@@ -406,10 +406,10 @@ client.on("interactionCreate", async (interaction) => {
       if (unit === 'h') msTime = val * 60 * 60 * 1000;
       if (unit === 'd') msTime = val * 24 * 60 * 60 * 1000;
 
-      if (sotien <= 0 || soluong <= 0) return interaction.reply({ content: "❌ Số tiền và số lượng phải lớn hơn 0!", ephemeral: true });
+      if (sotien <= 0 || soluong <= 0) return interaction.reply({ content: "❌ Số xu và số lượng phải lớn hơn 0!", ephemeral: true });
 
       const creatorCash = money.get(interaction.user.id) || 0;
-      if (creatorCash < sotien) return interaction.reply({ content: `❌ Bạn không đủ tiền! Cần ít nhất **${formatMoney(sotien)}** để có thể phát lì xì.`, ephemeral: true });
+      if (creatorCash < sotien) return interaction.reply({ content: `❌ Bạn không đủ xu! Cần ít nhất **${formatMoney(sotien)}** để có thể phát lì xì.`, ephemeral: true });
 
       const uniqueId = Date.now().toString();
       const confirmRow = new ActionRowBuilder().addComponents(
@@ -426,7 +426,7 @@ client.on("interactionCreate", async (interaction) => {
       });
 
       return interaction.reply({
-        content: `🧧 **XÁC NHẬN TẠO LÌ XÌ**\n- Số tiền mỗi người: **${formatMoney(sotien)}**\n- Số lượng tối đa: **${soluong}** người\n- Thời gian: **${thoigian}**\n\n*(Lưu ý: Tiền sẽ bị trừ thẳng từ ví của bạn mỗi khi có người khác bấm nhận)*`,
+        content: `🧧 **XÁC NHẬN TẠO LÌ XÌ**\n- Số xu mỗi người: **${formatMoney(sotien)}**\n- Số lượng tối đa: **${soluong}** người\n- Thời gian: **${thoigian}**\n\n*(Lưu ý: Xu sẽ bị trừ thẳng từ ví của bạn mỗi khi có người khác bấm nhận)*`,
         components: [confirmRow],
         ephemeral: true // Ẩn với người khác, chỉ chủ tọa nhìn thấy
       });
@@ -456,14 +456,14 @@ client.on("interactionCreate", async (interaction) => {
       if (unit === 'h') msTime = val * 60 * 60 * 1000;
       if (unit === 'd') msTime = val * 24 * 60 * 60 * 1000;
 
-      if (sotien <= 0 || soluong <= 0) return interaction.reply({ content: "❌ Số tiền và số lượng phải lớn hơn 0!", ephemeral: true });
+      if (sotien <= 0 || soluong <= 0) return interaction.reply({ content: "❌ Số xu và số lượng phải lớn hơn 0!", ephemeral: true });
 
       // KIỂM TRA VÍ TIỀN CỦA BOT
       if (!money.has(client.user.id)) money.set(client.user.id, 0); // Tạo ví cho bot nếu chưa có
       const botCash = money.get(client.user.id) || 0;
       if (botCash < sotien) {
         return interaction.reply({ 
-          content: `❌ Ví của Bot không đủ tiền! Ví Bot hiện tại chỉ có **${formatMoney(botCash)}**, cần ít nhất **${formatMoney(sotien)}** để phát phong bao này.`, 
+          content: `❌ Ví của Bot không đủ xu! Ví Bot hiện tại chỉ có **${formatMoney(botCash)}**, cần ít nhất **${formatMoney(sotien)}** để phát phong bao này.`, 
           ephemeral: true 
         });
       }
@@ -484,7 +484,7 @@ client.on("interactionCreate", async (interaction) => {
       });
 
       return interaction.reply({
-        content: `🧧 **XÁC NHẬN TẠO LÌ XÌ (BOT CHI TIỀN TÚI)**\n- Số tiền mỗi người: **${formatMoney(sotien)}**\n- Số lượng tối đa: **${soluong}** người\n- Thời gian: **${thoigian}**\n\n*(Lưu ý: Tiền lì xì sẽ bị trừ trực tiếp từ số dư ví tiền của BOT mỗi khi có thành viên nhấn nút nhận)*`,
+        content: `🧧 **XÁC NHẬN TẠO LÌ XÌ (BOT CHI TIỀN TÚI)**\n- Số xu mỗi người: **${formatMoney(sotien)}**\n- Số lượng tối đa: **${soluong}** người\n- Thời gian: **${thoigian}**\n\n*(Lưu ý: Xu lì xì sẽ bị trừ trực tiếp từ số dư ví xu của BOT mỗi khi có thành viên nhấn nút nhận)*`,
         components: [confirmRow],
         ephemeral: true // Chỉ có bạn nhìn thấy tin nhắn xác nhận này
       });
@@ -534,7 +534,7 @@ if (interaction.isChatInputCommand() && interaction.commandName === "taixiu") {
 
   const embed = new EmbedBuilder()
     .setTitle("🎲 Tài Xỉu WEW - Nhà cái Châu Chấu! 🔥")
-    .setDescription("Chọn loại cược 👇\nSau đó nhập số tiền (tối đa **1.000.000 VNĐ**)")
+    .setDescription("Chọn loại cược 👇\nSau đó nhập số xu (tối đa **1.000.000 <:ShinCoin:1522156112055635968>**)")
     .setColor("#ffc800");
 
   const row1 = new ActionRowBuilder().addComponents(
@@ -650,14 +650,14 @@ if (interaction.isModalSubmit()) {
       let amount = parseInt(interaction.fields.getTextInputValue("amount"));
 
       if (isNaN(amount) || amount <= 0 || amount > 1000000) {
-        return interaction.reply({ content: "❌ Số tiền cược phải từ 1 đến 1.000.000 VNĐ!", ephemeral: true });
+        return interaction.reply({ content: "❌ Số xu cược phải từ 1 đến 1.000.000 <:ShinCoin:1522156112055635968>!", ephemeral: true });
       }
 
       const userId = interaction.user.id;
       let userCash = money.get(userId) || 0;
 
       if (userCash < amount) {
-        return interaction.reply({ content: `❌ Bạn chỉ có **${formatMoney(userCash)}**, không đủ tiền cược!`, ephemeral: true });
+        return interaction.reply({ content: `❌ Bạn chỉ có **${formatMoney(userCash)}**, không đủ xu cược!`, ephemeral: true });
       }
 
       game.bets.set(userId, { type: betType, amount });
@@ -682,11 +682,11 @@ if (interaction.isModalSubmit()) {
       }
       const modal = new ModalBuilder()
         .setCustomId(`tx_bet_${betType}_${gameId}`)
-        .setTitle(`Nhập tiền cược (${betType.toUpperCase()})`);
+        .setTitle(`Nhập xu cược (${betType.toUpperCase()})`);
 
       const input = new TextInputBuilder()
         .setCustomId("amount")
-        .setLabel("Số tiền (tối đa 1.000.000)")
+        .setLabel("Số xu (tối đa 1.000.000 <:ShinCoin:1522156112055635968>)")
         .setStyle(TextInputStyle.Short)
         .setRequired(true);
 
@@ -841,7 +841,7 @@ if (id.startsWith("lixi_confirm_")) {
     
     const creatorCash = money.get(data.creatorId) || 0;
     if (creatorCash < data.sotien) {
-      return interaction.reply({ content: "❌ Người tạo phong bao đã hết tiền, không thể nhận thêm!", ephemeral: true });
+      return interaction.reply({ content: "❌ Người tạo phong bao đã hết xu, không thể nhận thêm!", ephemeral: true });
     }
     
     // Lưu thêm thời gian và tên người dùng để show ở nút Xem
@@ -938,7 +938,7 @@ if (id.startsWith("lixi_confirm_")) {
     
     const embed = new EmbedBuilder()
       .setTitle("🧧 PHONG BAO LÌ XÌ TỪ BOT WEW 🧧")
-      .setDescription(`🎁 **${data.creatorName}** đã xuất tiền ăn chặn tặng cho anh em một phong bao lì xì may mắn!\n\nSố lượng người nhận tối đa: **${data.soluong}**\nSố người đã nhận: **0** Số lượng phong bao còn lại: **${data.soluong}**\nThời gian còn lại: <t:${endTimestamp}:R>`)
+      .setDescription(`🎁 **${data.creatorName}** đã xuất xu ăn chặn tặng cho anh em một phong bao lì xì may mắn!\n\nSố lượng người nhận tối đa: **${data.soluong}**\nSố người đã nhận: **0** Số lượng phong bao còn lại: **${data.soluong}**\nThời gian còn lại: <t:${endTimestamp}:R>`)
       .setColor("#ff1a40")
       .setFooter({ text: "Sự kiện lì xì độc quyền tài trợ bởi Nhà Cái đến từ Châu Chấu" });
         
@@ -984,7 +984,7 @@ if (id.startsWith("lixi_confirm_")) {
     let choice = id.split("_")[1];
     let userId = interaction.user.id;
     await interaction.reply({
-      content: "💰 Nhập số tiền cược:",
+      content: "💰 Nhập số xu cược:",
       ephemeral: true
     });
     const filter = m => m.author.id === userId;
@@ -999,7 +999,7 @@ if (id.startsWith("lixi_confirm_")) {
       let bet = parseBet(msg.content, cash);
 
       if (!bet) return msg.reply("❌ Nhập số cho đàng hoàng (hoặc 'all')");
-      if (bet > cash) return msg.reply("❌ Không đủ tiền");
+      if (bet > cash) return msg.reply("❌ Không đủ xu");
       if (isNaN(bet) || bet <= 0) return msg.reply("❌ Nhập số cho đàng hoàng");
 
       money.set(userId, cash - bet);
@@ -1078,7 +1078,7 @@ if (id.startsWith("lixi_confirm_")) {
     if (action === "yes") {
       let cash = money.get(ownerId) || 0;
       if (cash < 10000) {
-        return interaction.update({ content: "❌ Không đủ tiền", embeds: [], components: [] });
+        return interaction.update({ content: "❌ Không đủ xu", embeds: [], components: [] });
       }
 
       money.set(ownerId, cash - 10000);
@@ -1126,7 +1126,7 @@ if (id.startsWith("lixi_confirm_")) {
     }
 
     let cash = money.get(userId) || 0;
-    if (cash < 100000) return interaction.reply({ content: "❌ Không đủ 100k VNĐ để quay", ephemeral: true });
+    if (cash < 100000) return interaction.reply({ content: "❌ Không đủ 100k <:ShinCoin:1522156112055635968> để quay", ephemeral: true });
 
     money.set(userId, cash - 100000);
     spinCooldown.set(userId, now + 10 * 60 * 1000);
@@ -1136,11 +1136,11 @@ if (id.startsWith("lixi_confirm_")) {
     rand = luck;
     let reward = 0;
     let text = "";
-    if (rand <= 0.40) { reward = 50000; text = "50.000 VNĐ"; }
-    else if (rand <= 0.60) { reward = 500000; text = "500.000 VNĐ"; }
-    else if (rand <= 0.75) { reward = 1000000; text = "1.000.000 VNĐ"; }
-    else if (rand <= 0.80) { reward = 150000000; text = "150.000.000 VNĐ"; }
-    else if (rand <= 0.81) { reward = 1000000000; text = "1.000.000.000 VNĐ"; }
+    if (rand <= 0.40) { reward = 50000; text = "50.000 <:ShinCoin:1522156112055635968>"; }
+    else if (rand <= 0.60) { reward = 500000; text = "500.000 <:ShinCoin:1522156112055635968>"; }
+    else if (rand <= 0.75) { reward = 1000000; text = "1.000.000 <:ShinCoin:1522156112055635968>"; }
+    else if (rand <= 0.80) { reward = 150000000; text = "150.000.000 <:ShinCoin:1522156112055635968>"; }
+    else if (rand <= 0.81) { reward = 1000000000; text = "1.000.000.000 <:ShinCoin:1522156112055635968>"; }
     else { reward = 0; text = "Tạch, không trúng gì cả"; }
 
     let newCash = (money.get(userId) || 0) + reward;
@@ -1166,7 +1166,7 @@ if (id.startsWith("lixi_confirm_")) {
 
       let lenderCash = money.get(targetId) || 10000;
       let borrowerCash = money.get(borrowerId) || 10000;
-      if (amount > lenderCash) return interaction.reply({ content: "❌ Không đủ tiền", ephemeral: true });
+      if (amount > lenderCash) return interaction.reply({ content: "❌ Không đủ xu", ephemeral: true });
 
       money.set(targetId, lenderCash - amount);
       money.set(borrowerId, borrowerCash + amount);
@@ -1397,7 +1397,7 @@ client.on("messageCreate", async (message) => {
   // ================= LỆNH SÀN ĐUA NGỰA =================
   if (cmd === "sanduangua") {
     if (args.length < 2) {
-      return message.reply("⚠️ Cú pháp đúng: `wew sanduangua (chọn số ngựa từ 1-6) (số tiền cược)`");
+      return message.reply("⚠️ Cú pháp đúng: `wew sanduangua (chọn số ngựa từ 1-6) (số xu cược)`");
     }
 
     let horseNum = parseInt(args[0]);
@@ -1408,8 +1408,8 @@ client.on("messageCreate", async (message) => {
     let cash = money.get(userId) || 0;
     let bet = parseBet(args[1], cash);
 
-    if (!bet) return message.reply("❌ Nhập số tiền cược cho đàng hoàng (hoặc viết 'all')!");
-    if (bet > cash) return message.reply("❌ Bạn không đủ tiền trong ví để tham gia đặt cược!");
+    if (!bet) return message.reply("❌ Nhập số xu cược cho đàng hoàng (hoặc viết 'all')!");
+    if (bet > cash) return message.reply("❌ Bạn không đủ xu trong ví để tham gia đặt cược!");
 
     money.set(userId, cash - bet);
     saveData();
@@ -1434,7 +1434,7 @@ client.on("messageCreate", async (message) => {
       `🏁 **SÀN ĐUA NGỰA WEW BẮT ĐẦU!** 🏁\n` +
       `👤 Người chơi: ${message.author}\n` +
       `🐎 Đặt cược vào: **Ngựa số ${horseNum}**\n` +
-      `💰 Số tiền cược: **${formatMoney(bet)}**\n\n` +
+      `💰 Số xu cược: **${formatMoney(bet)}**\n\n` +
       renderRace(positions, maxDistance)
     );
 
@@ -1452,7 +1452,7 @@ client.on("messageCreate", async (message) => {
           saveData();
 
           resultText = `🎉 **CHÚC MỪNG CHIẾN THẮNG!!!** Ngựa số **${winningHorse}** đã về đích xuất sắc!\n` +
-                       `💰 Bạn đã đoán chính xác và nhận được: **+${formatMoney(reward)}** (X3 tiền cược)\n` +
+                       `💰 Bạn đã đoán chính xác và nhận được: **+${formatMoney(reward)}** (X3 xu cược)\n` +
                        `🏦 Số dư hiện tại của bạn: **${formatMoney(newCash)}**`;
         } else {
           resultText = `**THẤT BẠI!!!** Ngựa số **${winningHorse}** mới là con cán đích trước.\n` +
@@ -1545,16 +1545,16 @@ if (cmd === "stop" || cmd === "chiu") {
         name: "💰 Lệnh bình thường (Trang 1)",
         value:
           "🔹 `wew daily`: nhận phần thưởng mỗi ngày\n" +
-          "🔹 `wew tien`: xem số tiền có trong ví\n" +
-          "🔹 `wew cf <số tiền/all>`: cược tiền 50/50\n" +
-          "🔹 `wew givetien @user <số tiền>`: tặng tiền cho người khác\n" +
-          "🔹 `wew gt <tên ngân hàng> <số tiền>`: gửi tiền vào ngân hàng\n" +
-          "🔹 `wew rt <tên ngân hàng> <số tiền>`: rút tiền từ ngân hàng\n" +
+          "🔹 `wew tien`: xem số xu có trong ví\n" +
+          "🔹 `wew cf <số xu/all>`: cược xu 50/50\n" +
+          "🔹 `wew givetien @user <số xu>`: tặng xu cho người khác\n" +
+          "🔹 `wew gt <tên ngân hàng> <số xu>`: gửi xu vào ngân hàng\n" +
+          "🔹 `wew rt <tên ngân hàng> <số xu>`: rút xu từ ngân hàng\n" +
           "🔹 `wew checknh`: kiểm tra số dư các ngân hàng\n" +
-          "🔹 `wew vaytien @user <số tiền>`: yêu cầu vay tiền từ người khác\n" +
+          "🔹 `wew vaytien @user <số xu>`: yêu cầu vay xu từ người khác\n" +
           "🔹 `wew trano @user`: trả nợ cho người vay\n" +
           "🔹 `wew checkno`: kiểm tra các khoản nợ của bạn\n" +
-          "🔹 `wew nhapcode <tên code>`: nhập code để nhận tiền",
+          "🔹 `wew nhapcode <tên code>`: nhập code để nhận xu",
       })
       .addFields({
         name: "💰 Lệnh bình thường (Trang 2)",
@@ -1567,18 +1567,18 @@ if (cmd === "stop" || cmd === "chiu") {
           "🔹 `wew start`: Bắt đầu chơi game nối từ (người vs bot)\n" +
           "🔹 `wew stop`: Dừng chơi game nối từ hiện tại\n" +
           "🔹 `wew chiu`: đầu hàng game nối từ\n" +
-          "🔹 `wew sanduangua <số ngựa> <số tiền>`: chơi sàn đua ngựa\n" +
-          "🔹 `wew baucua <lựa chọn> <số tiền>`: chơi bầu cua\n" +
-          "🔹 `/lixi (sotien) (soluong) (thoigian)`: lì xì tiền cho anh em\n" +
+          "🔹 `wew sanduangua <số ngựa> <số xu>`: chơi sàn đua ngựa\n" +
+          "🔹 `wew baucua <lựa chọn> <số xu>`: chơi bầu cua\n" +
+          "🔹 `/lixi (sotien) (soluong) (thoigian)`: lì xì xu cho anh em\n" +
           "🔹 `/taixiu`: chơi tài xỉu\n" +
           "🔹 `wew maydanhbac`: chơi máy đánh bạc",
       })
       .addFields({
         name: "👑 ADMIN/OWNER BOT",
         value:
-          "🔹 `wew addtien <tên người> <số tiền>`: thêm tiền cho người khác\n" +
-          "🔹 `wew thutien <tên người> <số tiền>`: thu tiền từ người khác\n"+
-          "🔹 `wew checktien @user`: kiểm tra số tiền của người khác\n" +
+          "🔹 `wew addtien <tên người> <số xu>`: thêm xu cho người khác\n" +
+          "🔹 `wew thutien <tên người> <số xu>`: thu xu từ người khác\n"+
+          "🔹 `wew checktien @user`: kiểm tra số xu của người khác\n" +
           "🔹 `wew addadmin <id>`: thêm admin\n" +
           "🔹 `wew unadmin <id>`: xóa admin\n" +
           "🔹 `wew recode <tên code>`: xóa code\n" +
@@ -1586,7 +1586,7 @@ if (cmd === "stop" || cmd === "chiu") {
           "🔹 `wew mayman @user <tăng % may mắn>`: tăng số may mắn lên \n" +
           "🔹 `wew unmayman @user`: reset số phần trăm may mắn\n" +
           "🔹 `/goptu <từ>`: góp thêm từ mới vào từ điển nối từ\n" +
-          "🔹 `wew addcode <tên code> <tiền> <số lần>`: thêm code mới\n",
+          "🔹 `wew addcode <tên code> <xu> <số lần>`: thêm code mới\n",
       })
       .addFields({
         name: "🛠️ OWNER SERVER",
@@ -1605,14 +1605,14 @@ if (cmd === "stop" || cmd === "chiu") {
       .setColor("#ffcc00")
       .setTitle("🎰 VÒNG QUAY MAY MẮN")
       .setDescription(
-        "💰 Giá quay: **100.000 VNĐ**\n" +
+        "💰 Giá quay: **100.000 <:ShinCoin:1522156112055635968>**\n" +
         "⏱️ Cooldown: **10 phút**\n\n" +
         "🎁 Phần thưởng:\n" +
-        "• 50.000 VNĐ (40%)\n" +
-        "• 500.000 VNĐ (20%)\n" +
-        "• 1.000.000 VNĐ (15%)\n" +
-        "• 150.000.000 VNĐ (5%)\n" +
-        "• 1.000.000 VNĐ (1%)\n"
+        "• 50.000 <:ShinCoin:1522156112055635968> (40%)\n" +
+        "• 500.000 <:ShinCoin:1522156112055635968> (20%)\n" +
+        "• 1.000.000 <:ShinCoin:1522156112055635968> (15%)\n" +
+        "• 150.000.000 <:ShinCoin:1522156112055635968> (5%)\n" +
+        "• 1.000.000 <:ShinCoin:1522156112055635968> (1%)\n"
       );
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId(`spin_${userId}`).setLabel("🎰 Quay").setStyle(ButtonStyle.Primary),
@@ -1689,7 +1689,7 @@ if (cmd === "stop" || cmd === "chiu") {
     let maxUses = parseInt(args[2]);
     if (!code) return message.reply("⚠️ Thiếu tên code!");
     if (code.includes(" ")) return message.reply("Code không được có khoảng cách!");
-    if (isNaN(reward) || reward <= 0) return message.reply("Số tiền không hợp lệ!");
+    if (isNaN(reward) || reward <= 0) return message.reply("Số xu không hợp lệ!");
     if (isNaN(maxUses) || maxUses <= 0) return message.reply("Số lượt không hợp lệ!");
     if (codes.has(code)) return message.reply("❌ Code này đã tồn tại!");
     codes.set(code, { reward: reward, maxUses: maxUses });
@@ -1754,7 +1754,7 @@ if (cmd === "stop" || cmd === "chiu") {
       .setTitle("🎮 KÉO - BÚA - BAO")
     .setDescription(
       "👉 Bấm nút để tham gia\n" +
-      "💰 Sau khi bấm sẽ nhập số tiền cược\n" +
+      "💰 Sau khi bấm sẽ nhập số xu cược\n" +
       "⏱️ 30 giây bắt đầu tính từ lúc tạo\n\n" +
       "✂️ Kéo > Bao\n🪨 Búa > Kéo\n📄 Bao > Búa"
     );
@@ -1864,20 +1864,20 @@ if (cmd === "stop" || cmd === "chiu") {
 
   if (!target) return message.reply("Tên người dùng sai hoặc không hợp lệ");
   if (target.id === userId) return message.reply("Tự vay luôn đi cho nhanh 😐");
-  if (isNaN(amount) || amount <= 0) return message.reply("Số tiền không hợp lệ!");
+  if (isNaN(amount) || amount <= 0) return message.reply("Số xu không hợp lệ!");
 
   let targetCash = money.get(target.id) || 10000;
 
   if (amount > targetCash) {
-    return message.reply(`❌ Người này không đủ tiền! Hiện có: **${formatMoney(targetCash)}**`);
+    return message.reply(`❌ Người này không đủ xu! Hiện có: **${formatMoney(targetCash)}**`);
   }
 
   const embed = new EmbedBuilder()
     .setColor("#f5d400")
-    .setTitle("📩 Yêu cầu vay tiền")
+    .setTitle("📩 Yêu cầu vay xu")
     .setDescription(
       `👤 Người vay: ${message.author}\n` +
-      `💰 Số tiền: **${formatMoney(amount)}**\n\n` +
+      `💰 Số xu: **${formatMoney(amount)}**\n\n` +
       `👉 ${target} hãy bấm nút bên dưới để quyết định`
     );
 
@@ -2033,9 +2033,9 @@ if (cmd === "muaveso") {
     .setColor("#ffd700")
     .setTitle("🎟️ MUA VÉ SỐ")
     .setDescription(
-      "💰 Giá: **10,000 VNĐ**\n" +
+      "💰 Giá: **10,000 <:ShinCoin:1522156112055635968>**\n" +
       "🎯 Tỉ lệ trúng: **1% - 3%**\n" +
-      "🏆 Trúng nhận: **1b - 5b VNĐ**\n\n" +
+      "🏆 Trúng nhận: **1b - 5b <:ShinCoin:1522156112055635968>**\n\n" +
       "👉 Bạn có chắc muốn mua không?"
     );
 
@@ -2101,11 +2101,11 @@ if (cmd === "baucua") {
   let bet = parseBet(args[1], cash);
 
   if (!bet) {
-    return message.reply("❌ Nhập số tiền hợp lệ hoặc");
+    return message.reply("❌ Nhập số xu hợp lệ hoặc");
   }
 
   if (bet > cash) {
-    return message.reply("❌ Không đủ tiền");
+    return message.reply("❌ Không đủ xu");
   }
 
   if (!choice || !animals.includes(choice)) {
@@ -2113,13 +2113,13 @@ if (cmd === "baucua") {
   }
 
   if (!bet || bet <= 0) {
-    return message.reply("❌ Số tiền cược không hợp lệ");
+    return message.reply("❌ Số xu cược không hợp lệ");
   }
 
   let userMoney = money.get(userId) || 0;
 
   if (userMoney < bet) {
-    return message.reply("❌ Không đủ tiền để chơi");
+    return message.reply("❌ Không đủ xu để chơi");
   }
 
   let results = [];
@@ -2203,7 +2203,7 @@ if (cmd === "checknh") {
   // XEM TIỀN
   if (cmd === "tien") {
     let cash = money.get(userId);
-    message.reply(`💰 Số tiền trong ví của bạn là: **${formatMoney(cash)}**`);
+    message.reply(`💰 Số xu trong ví của bạn là: **${formatMoney(cash)}**`);
   }
 
 // GỬI NGÂN HÀNG
@@ -2217,8 +2217,8 @@ if (cmd === "gt") {
 
     if (!bankInput) return message.reply("⚠️ Thiếu tên ngân hàng!");
     if (!bankKey) return message.reply("Ngân hàng không tồn tại!");
-    if (isNaN(amount) || amount <= 0) return message.reply("Số tiền không hợp lệ!");
-    if (amount > cash) return message.reply(`Không đủ tiền (${formatMoney(cash)})`);
+    if (isNaN(amount) || amount <= 0) return message.reply("Số xu không hợp lệ!");
+    if (amount > cash) return message.reply(`Không đủ xu (${formatMoney(cash)})`);
 
     updateBank(userId);
     let bank = banks[bankKey];
@@ -2250,18 +2250,18 @@ if (cmd === "rt") {
     updateBank(userId);
     let userBanks = bankData.get(userId);
 
-    if (!userBanks || !userBanks[bankKey]) return message.reply("Bạn không có tiền trong ngân hàng này!");
+    if (!userBanks || !userBanks[bankKey]) return message.reply("Bạn không có xu trong ngân hàng này!");
 
     let bankRecord = userBanks[bankKey];
     let amountArg = args[args.length - 1]?.toLowerCase();
     let amount = amountArg === "all" ? bankRecord.amount : parseInt(amountArg);
 
-    if (isNaN(amount) || amount <= 0) return message.reply("Số tiền không hợp lệ!");
-    if (amount > bankRecord.amount) return message.reply("Không đủ tiền trong ngân hàng!");
+    if (isNaN(amount) || amount <= 0) return message.reply("Số xu không hợp lệ!");
+    if (amount > bankRecord.amount) return message.reply("Không đủ xu trong ngân hàng!");
 
     bankRecord.amount -= amount;
     
-    // Nếu rút sạch tiền thì xóa data của ngân hàng đó đi
+    // Nếu rút sạch xu thì xóa data của ngân hàng đó đi
     if (bankRecord.amount <= 0) {
       delete userBanks[bankKey];
     }
@@ -2285,7 +2285,7 @@ if (cmd === "rt") {
     let amount = parseInt(args[1]);
 
     if (!target) return message.reply("Tên người dùng sai hoặc không hợp lệ");
-    if (isNaN(amount) || amount <= 0) return message.reply("Số tiền không hợp lệ!");
+    if (isNaN(amount) || amount <= 0) return message.reply("Số xu không hợp lệ!");
     if (!money.has(target.id)) money.set(target.id, 10000);
 
     money.set(target.id, money.get(target.id) + amount);
@@ -2306,8 +2306,8 @@ if (cmd === "rt") {
     let amountArg = args[1]?.toLowerCase();
     let amount = amountArg === "all" ? current : parseInt(amountArg);
 
-    if (isNaN(amount) || amount <= 0) return message.reply("Số tiền không hợp lệ!");
-    if (amount > current) return message.reply("Không đủ tiền để thu!");
+    if (isNaN(amount) || amount <= 0) return message.reply("Số xu không hợp lệ!");
+    if (amount > current) return message.reply("Không đủ xu để thu!");
 
     money.set(target.id, current - amount);
     saveData(); 
@@ -2332,7 +2332,7 @@ if (cmd === "rt") {
       targetCash = 10000;
     }
 
-    message.reply(`🔍 Số tiền hiện tại của **${target.username}** là: **${formatMoney(targetCash)}**`);
+    message.reply(`🔍 Số xu hiện tại của **${target.username}** là: **${formatMoney(targetCash)}**`);
   }
 
   // CƯỢC
@@ -2360,14 +2360,14 @@ if (cmd === "rt") {
       bet = parseInt(betArg);
     }
 
-    if (!betArg) return message.reply("⚠️ Thiếu số tiền muốn cược!");
+    if (!betArg) return message.reply("⚠️ Thiếu số xu muốn cược!");
 
     if (betArg !== "all" && (isNaN(bet) || bet <= 0)) {
-      return message.reply("❌ Số tiền không hợp lệ!");
+      return message.reply("❌ Số xu không hợp lệ!");
     }
 
     if (bet > cash) {
-      return message.reply("❌ Không đủ tiền để cược!");
+      return message.reply("❌ Không đủ xu để cược!");
     }
 
     cooldown.set(userId, now + 10000);
@@ -2492,7 +2492,7 @@ if (cmd === "maydanhbac") {
 
   const embed = new EmbedBuilder()
     .setTitle("🎰 Máy đánh bạc 🎰")
-    .setDescription("Giá mỗi lần quay: **200,000 VNĐ**\n\n| 🍒 | 🔔 | 🎰 |\n\n*Nhấn nút để thử vận may!*")
+    .setDescription("Giá mỗi lần quay: **200,000 <:ShinCoin:1522156112055635968>**\n\n| 🍒 | 🔔 | 🎰 |\n\n*Nhấn nút để thử vận may!*")
     .setColor("#FFD700");
 
   const row = new ActionRowBuilder().addComponents(
@@ -2536,7 +2536,7 @@ if (i.customId === "mdb_spin_btn") {
 
       let cash = money.get(userId) || 0;
       if (cash < SPIN_COST) {
-        return i.reply({ content: `❌ Bạn không đủ tiền! Cần ít nhất **200,000 VNĐ** để quay.`, ephemeral: true });
+        return i.reply({ content: `❌ Bạn không đủ xu! Cần ít nhất **200,000 <:ShinCoin:1522156112055635968>** để quay.`, ephemeral: true });
       }
 
       mayDanhBacCooldown.set(userId, now);
@@ -2600,7 +2600,7 @@ if (i.customId === "mdb_spin_btn") {
 
       // FIX EMOJI: Dùng formattedResult thay vì result
       const resultString = `| ${formattedResult[0]} | ${formattedResult[1]} | ${formattedResult[2]} |`;
-      let descString = `Giá mỗi lần quay: **200,000 VNĐ**\n\n${resultString}\n\n`;
+      let descString = `Giá mỗi lần quay: **200,000 <:ShinCoin:1522156112055635968>**\n\n${resultString}\n\n`;
 
       if (isWin) {
         descString += `🎉 **TRÚNG RỒI!** Bạn nhận được **${formatMoney(winAmount)}** (x${multiplier})`;
@@ -2634,10 +2634,10 @@ if (i.customId === "mdb_spin_btn") {
     let amount = amountArg === "all" ? cash : parseInt(amountArg);
     if (!target) return message.reply("Tên người dùng sai hoặc không hợp lệ");
     if (target.id === userId) return message.reply("Không thể chuyển cho chính bản thân!");
-    if (isNaN(amount) || amount <= 0) return message.reply("Số tiền không hợp lệ!");
+    if (isNaN(amount) || amount <= 0) return message.reply("Số xu không hợp lệ!");
 
     if (amount > cash) {
-      return message.reply(`Số tiền của bạn không đủ! Bạn có **${formatMoney(cash)}**`);
+      return message.reply(`Số xu của bạn không đủ! Bạn có **${formatMoney(cash)}**`);
     }
 
     if (!money.has(target.id)) {
