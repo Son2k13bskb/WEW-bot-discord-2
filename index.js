@@ -3100,24 +3100,9 @@ function generateHandButtons(hand, lobbyId) {
 
 // Hàm chuyển đổi giá trị để so sánh bài Tiến Lên
 function getCardValue(rank, suit) {
-  const rankValues = { '3': 1, '4': 2, '5': 3, '6': 4, '7': 5, '8': 6, '9': 7, '10': 8, 'J': 9, 'Q': 10, 'K': 11, 'A': 12, '2': 13 };
-  const suitValues = { '♠': 1, '♣': 2, '♦': 3, '♥': 4 }; // Bích < Tép < Rô < Cơ
-
-  function compareCards(cardA, cardB, mode) {
-    // Trả về true nếu cardA lớn hơn cardB
-    const valA = rankValues[cardA.rank];
-    const valB = rankValues[cardB.rank];
-
-    if (valA !== valB) return valA > valB;
-
-    // Nếu bằng Rank, xét đến Chất bài
-    if (mode === "tlmn") {
-      return suitValues[cardA.suit] > suitValues[cardB.suit];
-    } else {
-      // Miền Bắc yêu cầu đồng chất đồng màu và chất phải lớn hơn
-      return cardA.suit === cardB.suit; 
-    }
-  }
+  const rankValues = { '3':3, '4':4, '5':5, '6':6, '7':7, '8':8, '9':9, '10':10, 'J':11, 'Q':12, 'K':13, 'A':14, '2':15 };
+  const suitValues = { '♠': 1, '♣': 2, '♦': 3, '♥': 4 };
+  return { rank: rankValues[rank], suit: suitValues[suit] };
 }
 
 // Phân tích bài cầm trên tay để hiển thị gợi ý (Đôi, Ba, Sảnh...) theo yêu cầu
@@ -3200,37 +3185,44 @@ async function startDanhBaiGame(client, lobbyId) {
 }
 
 // Hàm cập nhật giao diện tổng quan bàn đấu trong Thread
-async function updateGameUI(client, lobbyId, statusText) {
-  const lobby = activeLobbies.get(lobbyId);
+async function updateGameUI(client, lobbyId, systemNotice = "") {
   const game = activeCardGames.get(lobbyId);
-  if (!lobby || !game) return;
+  const lobby = activeLobbies.get(lobbyId);
+  if (!game || !lobby) return;
 
-  const channel = client.channels.cache.get(lobby.channelId);
-  if (!channel) return;
+  const thread = client.channels.cache.get(lobby.threadId);
+  if (!thread) return;
 
-  // 📝 Tạo Embed hiển thị trạng thái bàn chơi hiện tại
+  const currentActivePlayer = game.players[game.currentTurn];
+
+  let playerStatusList = "";
+  game.players.forEach((p, idx) => {
+    const turnIndicator = idx === game.currentTurn ? "➡️ " : "⬛ ";
+    const passIndicator = game.passedPlayers.has(p.id) ? " ❌ (Đã bỏ lượt)" : "";
+    playerStatusList += `${turnIndicator}**${p.name}** — Còn ${p.hand.length} lá trên tay${passIndicator}\n`;
+  });
+
   const embed = new EmbedBuilder()
-    .setTitle(`🎴 Tiến Lên ${lobby.loaiBai === "tlmn" ? "Miền Nam" : "Miền Bắc"}`)
-    .setDescription(`**Vừa đánh:** ${statusText}\n**Lượt của:** <@${game.players[game.currentTurn].id}>`)
-    .addFields(
-      { name: "🃏 Bài trên bàn:", value: `\`${game.tableCards || "Trống"}\``, inline: false },
-      { name: "👥 Danh sách người chơi:", value: game.players.map(p => `• ${p.name}: ${p.hand.length} lá`).join("\n") }
-    )
-    .setColor("#00ff00");
+    .setTitle(`🃏 Tiến Lên ${game.mode === 'tlmn' ? 'Miền Nam' : 'Miền Bắc'} — Đang Trận`)
+    .setDescription(`**Thông báo**: ${systemNotice}\n\n**Trạng thái bàn chơi:**\n${playerStatusList}\n**Bài trên bàn hiện tại:** ${game.tableCards ? game.tableCards : "Chưa có (Bàn trống)"}\n\nLượt đánh kế tiếp thuộc về: <@${currentActivePlayer.id}> (Thời gian suy nghĩ: 30s)`)
+    .setColor("#00ff66");
 
   const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(`db_showhand_${lobbyId}`).setLabel("Xem bài của bạn").setStyle(ButtonStyle.Primary),
-    new ButtonBuilder().setCustomId(`db_pass_${lobbyId}`).setLabel("Bỏ lượt").setStyle(ButtonStyle.Danger)
+    new ButtonBuilder().setCustomId(`db_showhand_${lobbyId}`).setLabel("Xem/Đánh Bài Của Bạn").setStyle(ButtonStyle.Primary).setEmoji("👀"),
+    new ButtonBuilder().setCustomId(`db_pass_${lobbyId}`).setLabel("Bỏ Qua Lượt").setStyle(ButtonStyle.Danger).setEmoji("⏭️")
   );
 
-  // 🔄 Thực hiện chỉnh sửa trực tiếp trên tin nhắn cũ
-  try {
-    const msg = await channel.messages.fetch(lobby.messageId);
-    await msg.edit({ embeds: [embed], components: [row] });
-  } catch (err) {
-    const newMsg = await channel.send({ embeds: [embed], components: [row] });
-    lobby.messageId = newMsg.id; // Dự phòng nếu tin nhắn cũ bị xóa
-  }
+  // Gửi giao diện mới và xóa bộ đếm giờ cũ nếu có để tránh đè luồng
+  if (cardTurnTimers.has(lobbyId)) clearTimeout(cardTurnTimers.get(lobbyId));
+
+  await thread.send({ embeds: [embed], components: [row] });
+
+  // Khởi chạy đếm ngược 30 giây tự động bỏ lượt nếu không đánh
+  const turnTimer = setTimeout(() => {
+    handlePlayerPass(client, lobbyId, currentActivePlayer.id, true);
+  }, 30 * 1000);
+  
+  cardTurnTimers.set(lobbyId, turnTimer);
 }
 
 // Hàm giải quyết logic Bỏ Qua lượt (Ấn nút hoặc Hết giờ)
@@ -3286,50 +3278,25 @@ function generateHandButtons(hand, lobbyId) {
   const rows = [];
   let currentRow = new ActionRowBuilder();
 
-  // 📊 Gom nhóm các lá bài theo Rank để tìm Đôi, Ba, Tứ quý
-  const groups = {};
-  hand.forEach(card => {
-    if (!groups[card.rank]) groups[card.rank] = [];
-    groups[card.rank].push(card);
-  });
+  // Sắp xếp tăng dần để xuất nút cho đẹp mắt
+  const sortedHand = [...hand].sort((a, b) => getCardValue(a.rank, a.suit).rank - getCardValue(b.rank, b.suit).rank);
 
-  // 1️⃣ Tạo nút Đánh Đơn cho từng lá bài
-  hand.forEach(card => {
-    if (currentRow.components.length >= 5) { rows.push(currentRow); currentRow = new ActionRowBuilder(); }
+  sortedHand.slice(0, 24).forEach((card, idx) => {
+    const cardLabel = `${card.rank}${card.suit}`;
     currentRow.addComponents(
       new ButtonBuilder()
-        .setCustomId(`db_play_${lobbyId}_single_${card.rank}_${card.suit}`)
-        .setLabel(`${card.rank}${card.suit}`)
-        .setStyle(ButtonStyle.Primary)
+        .setCustomId(`db_play_${lobbyId}_${card.rank}_${card.suit}`)
+        .setLabel(cardLabel)
+        .setStyle(card.suit === '♦' || card.suit === '♥' ? ButtonStyle.Danger : ButtonStyle.Secondary)
     );
+
+    if (currentRow.components.length === 5 || idx === sortedHand.length - 1) {
+      rows.push(currentRow);
+      currentRow = new ActionRowBuilder();
+    }
   });
 
-  // 2️⃣ Tạo nút Tổ hợp thông minh (Đôi, Tứ Quý)
-  for (const [rank, cards] of Object.entries(groups)) {
-    if (cards.length >= 2) { // Có đôi trở lên
-      if (currentRow.components.length >= 5) { rows.push(currentRow); currentRow = new ActionRowBuilder(); }
-      const cardsPayload = cards.map(c => `${c.rank}${c.suit}`).join(",");
-      currentRow.addComponents(
-        new ButtonBuilder()
-          .setCustomId(`db_playcombo_${lobbyId}_pair_${cardsPayload}`)
-          .setLabel(`Đôi ${rank} (${cards.map(c=>c.suit).join("")})`)
-          .setStyle(ButtonStyle.Success)
-      );
-    }
-    if (cards.length === 4) { // Có tứ quý
-      if (currentRow.components.length >= 5) { rows.push(currentRow); currentRow = new ActionRowBuilder(); }
-      const cardsPayload = cards.map(c => `${c.rank}${c.suit}`).join(",");
-      currentRow.addComponents(
-        new ButtonBuilder()
-          .setCustomId(`db_playcombo_${lobbyId}_quad_${cardsPayload}`)
-          .setLabel(`Tứ Quý ${rank} 🔥`)
-          .setStyle(ButtonStyle.Danger)
-      );
-    }
-  }
-
-  if (currentRow.components.length > 0) rows.push(currentRow);
-  return rows.slice(0, 5); // Discord giới hạn tối đa 5 hàng nút
+  return rows;
 }
 
 // Hàm cập nhật trạng thái sảnh chờ ban đầu
@@ -3415,6 +3382,20 @@ async function resultStr(channel, channelId) {
   saveData();
 }
 
-
+client.on("threadMembersUpdate", async (oldMembers, newMembers) => {
+    // Kiểm tra xem thread này có thuộc về sảnh bài nào không
+    const matchedLobby = [...activeLobbies.values()].find(l => l.threadId === newMembers.thread.id);
+    if (matchedLobby) {
+        const threadMembers = await newMembers.thread.members.fetch();
+        // Trừ tài khoản Bot ra, nếu không còn ai thực tế tương tác
+        const humanMembers = threadMembers.filter(m => m.id !== client.user.id);
+        if (humanMembers.size === 0) {
+             if (cardTurnTimers.has(matchedLobby.id)) clearTimeout(cardTurnTimers.get(matchedLobby.id));
+             await newMembers.thread.delete("Không còn ai hoạt động trong thread").catch(()=>{});
+             activeLobbies.delete(matchedLobby.id);
+             activeCardGames.delete(matchedLobby.id);
+        }
+    }
+});
 
 client.login(process.env.TOKEN);
