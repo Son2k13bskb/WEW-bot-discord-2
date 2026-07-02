@@ -672,31 +672,32 @@ client.on("interactionCreate", async (interaction) => {
       });
     }
 
-  if (interaction.commandName === "danhbai") {
-  const mode = interaction.options.getString("chedo");
-  const moneyMode = interaction.options.getString("tien");
+if (interaction.commandName === "danhbai") {
   const maxPlayers = interaction.options.getInteger("songuoi");
 
   const roomId = Date.now();
 
-  tienLenRooms.set(roomId, {
+  const endTime = Math.floor((Date.now() + 2 * 60 * 1000) / 1000); // 2 phút (timestamp Discord)
+
+  const room = {
+    id: roomId,
     host: interaction.user.id,
     players: [interaction.user.id],
     max: maxPlayers,
-    mode,
-    moneyMode,
-    bets: {},
     started: false,
-    closed: false
-  });
+    endTime,
+    messageId: null,
+    threadId: null,
+    interval: null
+  };
+
+  tienLenRooms.set(roomId, room);
 
   const embed = new EmbedBuilder()
-    .setTitle("♣️ Đánh bài ăn tiền ♠️")
+    .setTitle("♣️ Phòng Tiến Lên ♠️")
     .setDescription(`
-Số người chơi tối đa: ${maxPlayers}
-Số người chơi đã tham gia: 1
-Có chơi ăn tiền: ${moneyMode === "money" ? "Có" : "Không"}
-Thời gian: 5 phút
+👥 Số người chơi: **${room.players.length}/${room.max}**
+⏳ Thời gian: <t:${room.endTime}:R>
     `);
 
   const row = new ActionRowBuilder().addComponents(
@@ -710,13 +711,42 @@ Thời gian: 5 phút
       .setStyle(ButtonStyle.Danger)
   );
 
-  await interaction.reply({ embeds: [embed], components: [row] });
+  const msg = await interaction.reply({
+    embeds: [embed],
+    components: [row],
+    fetchReply: true
+  });
 
-  setTimeout(() => {
-    const room = tienLenRooms.get(roomId);
-    if (!room) return;
-    room.closed = true;
-  }, 5 * 60 * 1000);
+  room.messageId = msg.id;
+
+  // 🔥 TẠO THREAD
+  const thread = await msg.startThread({
+    name: `🃏 Phòng bài ${interaction.user.username}`,
+    autoArchiveDuration: 60
+  });
+
+  room.threadId = thread.id;
+
+  // ⏱️ LOOP CHECK TIME
+  room.interval = setInterval(async () => {
+    const now = Math.floor(Date.now() / 1000);
+
+    if (room.started) {
+      clearInterval(room.interval);
+      return;
+    }
+
+    if (now >= room.endTime) {
+      clearInterval(room.interval);
+
+      if (room.players.length >= 2) {
+        startGame(room);
+      } else {
+        tienLenRooms.delete(roomId);
+        thread.send("❌ Không đủ người, phòng hủy.");
+      }
+    }
+  }, 1000);
 }
   
   if (interaction.commandName === "setlogschannel") {
@@ -996,91 +1026,72 @@ async function resolveTaiXiu(channel, channelId) {
   saveData();
 }
 
-if (interaction.isButton() && interaction.customId.startsWith("tl_")) {
-  const [_, action, roomId] = interaction.customId.split("_");
-  const room = tienLenRooms.get(Number(roomId));
-  if (!room) return;
+if (interaction.customId.startsWith("tl_join_")) {
+  const roomId = Number(interaction.customId.split("_")[2]);
+  const room = tienLenRooms.get(roomId);
 
-  if (action === "join") {
+  if (!room) return interaction.reply({ content: "Phòng không tồn tại", ephemeral: true });
 
-    if (room.closed)
-      return interaction.reply({ content: "❌ Hết thời gian", ephemeral: true });
+  if (room.started) return interaction.reply({ content: "Game đã bắt đầu", ephemeral: true });
 
-    if (room.players.includes(interaction.user.id))
-      return interaction.reply({ content: "❌ Đã tham gia", ephemeral: true });
-
-    if (room.players.length >= room.max)
-      return interaction.reply({ content: "❌ Phòng đầy", ephemeral: true });
-
-    if (room.moneyMode === "money") {
-      const modal = new ModalBuilder()
-        .setCustomId(`tl_bet_${roomId}`)
-        .setTitle("Nhập tiền cược");
-
-      modal.addComponents(
-        new ActionRowBuilder().addComponents(
-          new TextInputBuilder()
-            .setCustomId("money")
-            .setLabel("50000 - 1000000")
-            .setStyle(TextInputStyle.Short)
-        )
-      );
-
-      return interaction.showModal(modal);
-    }
-
-    room.players.push(interaction.user.id);
-    return interaction.reply({ content: "✅ Đã tham gia", ephemeral: true });
+  if (room.players.includes(interaction.user.id)) {
+    return interaction.reply({ content: "M vào rồi còn spam cc gì 😏", ephemeral: true });
   }
 
-  if (room.players.length === room.max && !room.started) {
+  if (room.players.length >= room.max) {
+    return interaction.reply({ content: "Phòng full", ephemeral: true });
+  }
+
+  room.players.push(interaction.user.id);
+
+  await updateRoomEmbed(interaction, room);
+
+  // đủ người → start luôn
+  if (room.players.length === room.max) {
+    clearInterval(room.interval);
+    startGame(room);
+  }
+
+  await interaction.deferUpdate();
+}
+
+if (interaction.customId.startsWith("tl_leave_")) {
+  const roomId = Number(interaction.customId.split("_")[2]);
+  const room = tienLenRooms.get(roomId);
+
+  if (!room) return;
+
+  room.players = room.players.filter(p => p !== interaction.user.id);
+
+  await updateRoomEmbed(interaction, room);
+
+  await interaction.deferUpdate();
+}
+
+async function updateRoomEmbed(interaction, room) {
+  const embed = new EmbedBuilder()
+    .setTitle("♣️ Phòng Tiến Lên ♠️")
+    .setDescription(`
+👥 Số người chơi: **${room.players.length}/${room.max}**
+⏳ Thời gian: <t:${room.endTime}:R>
+    `);
+
+  const msg = await interaction.channel.messages.fetch(room.messageId);
+  await msg.edit({ embeds: [embed] });
+}
+
+async function startGame(room) {
   room.started = true;
 
-  const thread = await interaction.channel.threads.create({
-    name: `Đánh bài Wew ${room.players.length}`,
-    type: 12
-  });
+  const thread = await client.channels.fetch(room.threadId);
 
-  for (const p of room.players)
-    await thread.members.add(p);
+  thread.send(`🔥 Game bắt đầu với ${room.players.length} người!`);
 
   const hands = deal(room.players);
   room.hands = hands;
+  room.turn = room.players[0];
 
-  const starter = Object.keys(hands).find(u =>
-    hands[u].includes("3♠")
-  );
-
-  room.turn = starter;
-
-  await thread.send("🃏 Đang chia bài...");
-  await thread.send(`🔥 <@${starter}> đánh trước (có 3♠)`);
-
-  for (const p of room.players) {
-    const user = await client.users.fetch(p);
-    await user.send(`Bài của bạn:\n${hands[p].join(", ")}`);
-  }
-}
-
-  if (action === "leave") {
-    room.players = room.players.filter(p => p !== interaction.user.id);
-    return interaction.reply({ content: "❌ Đã thoát", ephemeral: true });
-  }
-}
-
-if (interaction.isModalSubmit() && interaction.customId.startsWith("tl_bet_")) {
-  const roomId = interaction.customId.split("_")[2];
-  const room = tienLenRooms.get(Number(roomId));
-
-  const bet = parseInt(interaction.fields.getTextInputValue("money"));
-
-  if (isNaN(bet) || bet < 50000 || bet > 1000000)
-    return interaction.reply({ content: "❌ Sai tiền", ephemeral: true });
-
-  room.bets[interaction.user.id] = bet;
-  room.players.push(interaction.user.id);
-
-  return interaction.reply({ content: "✅ Đã vào phòng", ephemeral: true });
+  thread.send(`👉 Lượt đầu: <@${room.turn}>`);
 }
 
   // ================= LÌ XÌ =================
