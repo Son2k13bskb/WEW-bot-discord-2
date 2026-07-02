@@ -125,7 +125,7 @@ const slashCommands = [
     .setName("wewlixi")
     .setDescription("Bot dùng <:ShinCoin:1522156112055635968> ăn chặn được để lì xì cho mọi người (Chỉ caubevotri)")
     .addIntegerOption(option => 
-      option.setName("sotien")
+      option.setName("soxu")
       .setDescription("Số <:ShinCoin:1522156112055635968> mỗi người nhận")
       .setRequired(true))
     .addIntegerOption(option => 
@@ -162,7 +162,7 @@ const slashCommands = [
     .setName("lixi")
     .setDescription("Tạo phong bao lì xì cho mọi người")
     .addIntegerOption(option => 
-      option.setName("sotien")
+      option.setName("soxu")
       .setDescription("Số <:ShinCoin:1522156112055635968> mỗi người nhận")
       .setRequired(true))
     .addIntegerOption(option => 
@@ -388,7 +388,7 @@ client.on("interactionCreate", async (interaction) => {
   if (interaction.isChatInputCommand()) {
     
     if (interaction.commandName === "lixi") {
-      const sotien = interaction.options.getInteger("sotien");
+      const soxu = interaction.options.getInteger("soxu");
       const soluong = interaction.options.getInteger("soluong");
       const thoigian = interaction.options.getString("thoigian");
 
@@ -406,10 +406,10 @@ client.on("interactionCreate", async (interaction) => {
       if (unit === 'h') msTime = val * 60 * 60 * 1000;
       if (unit === 'd') msTime = val * 24 * 60 * 60 * 1000;
 
-      if (sotien <= 0 || soluong <= 0) return interaction.reply({ content: "❌ Số xu và số lượng phải lớn hơn 0!", ephemeral: true });
+      if (soxu <= 0 || soluong <= 0) return interaction.reply({ content: "❌ Số xu và số lượng phải lớn hơn 0!", ephemeral: true });
 
       const creatorCash = money.get(interaction.user.id) || 0;
-      if (creatorCash < sotien) return interaction.reply({ content: `❌ Bạn không đủ xu! Cần ít nhất **${formatMoney(sotien)}** để có thể phát lì xì.`, ephemeral: true });
+      if (creatorCash < soxu) return interaction.reply({ content: `❌ Bạn không đủ xu! Cần ít nhất **${formatMoney(soxu)}** để có thể phát lì xì.`, ephemeral: true });
 
       const uniqueId = Date.now().toString();
       const confirmRow = new ActionRowBuilder().addComponents(
@@ -420,13 +420,13 @@ client.on("interactionCreate", async (interaction) => {
       pendingLixi.set(uniqueId, {
         creatorId: interaction.user.id,
         creatorName: interaction.user.globalName || interaction.user.username,
-        sotien,
+        soxu,
         soluong,
         msTime
       });
 
       return interaction.reply({
-        content: `🧧 **XÁC NHẬN TẠO LÌ XÌ**\n- Số xu mỗi người: **${formatMoney(sotien)}**\n- Số lượng tối đa: **${soluong}** người\n- Thời gian: **${thoigian}**\n\n*(Lưu ý: Xu sẽ bị trừ thẳng từ ví của bạn mỗi khi có người khác bấm nhận)*`,
+        content: `🧧 **XÁC NHẬN TẠO LÌ XÌ**\n- Số xu mỗi người: **${formatMoney(soxu)}**\n- Số lượng tối đa: **${soluong}** người\n- Thời gian: **${thoigian}**\n\n*(Lưu ý: Xu sẽ bị trừ thẳng từ ví của bạn mỗi khi có người khác bấm nhận)*`,
         components: [confirmRow],
         ephemeral: true // Ẩn với người khác, chỉ chủ tọa nhìn thấy
       });
@@ -438,7 +438,7 @@ client.on("interactionCreate", async (interaction) => {
         return interaction.reply({ content: "❌ Bạn không có quyền hạn để sử dụng lệnh hệ thống này!", ephemeral: true });
       }
 
-      const sotien = interaction.options.getInteger("sotien");
+      const soxu = interaction.options.getInteger("soxu");
       const soluong = interaction.options.getInteger("soluong");
       const thoigian = interaction.options.getString("thoigian");
 
@@ -456,14 +456,14 @@ client.on("interactionCreate", async (interaction) => {
       if (unit === 'h') msTime = val * 60 * 60 * 1000;
       if (unit === 'd') msTime = val * 24 * 60 * 60 * 1000;
 
-      if (sotien <= 0 || soluong <= 0) return interaction.reply({ content: "❌ Số xu và số lượng phải lớn hơn 0!", ephemeral: true });
+      if (soxu <= 0 || soluong <= 0) return interaction.reply({ content: "❌ Số xu và số lượng phải lớn hơn 0!", ephemeral: true });
 
       // KIỂM TRA VÍ TIỀN CỦA BOT
       if (!money.has(client.user.id)) money.set(client.user.id, 0); // Tạo ví cho bot nếu chưa có
       const botCash = money.get(client.user.id) || 0;
-      if (botCash < sotien) {
+      if (botCash < soxu) {
         return interaction.reply({ 
-          content: `❌ Ví của Bot không đủ xu! Ví Bot hiện tại chỉ có **${formatMoney(botCash)}**, cần ít nhất **${formatMoney(sotien)}** để phát phong bao này.`, 
+          content: `❌ Ví của Bot không đủ xu! Ví Bot hiện tại chỉ có **${formatMoney(botCash)}**, cần ít nhất **${formatMoney(soxu)}** để phát phong bao này.`, 
           ephemeral: true 
         });
       }
@@ -478,13 +478,13 @@ client.on("interactionCreate", async (interaction) => {
       pendingLixi.set(uniqueId, {
         creatorId: client.user.id,
         creatorName: client.user.username,
-        sotien,
+        soxu,
         soluong,
         msTime
       });
 
       return interaction.reply({
-        content: `🧧 **XÁC NHẬN TẠO LÌ XÌ (BOT CHI TIỀN TÚI)**\n- Số xu mỗi người: **${formatMoney(sotien)}**\n- Số lượng tối đa: **${soluong}** người\n- Thời gian: **${thoigian}**\n\n*(Lưu ý: Xu lì xì sẽ bị trừ trực tiếp từ số dư ví xu của BOT mỗi khi có thành viên nhấn nút nhận)*`,
+        content: `🧧 **XÁC NHẬN TẠO LÌ XÌ (BOT CHI TIỀN TÚI)**\n- Số xu mỗi người: **${formatMoney(soxu)}**\n- Số lượng tối đa: **${soluong}** người\n- Thời gian: **${thoigian}**\n\n*(Lưu ý: Xu lì xì sẽ bị trừ trực tiếp từ số dư ví xu của BOT mỗi khi có thành viên nhấn nút nhận)*`,
         components: [confirmRow],
         ephemeral: true // Chỉ có bạn nhìn thấy tin nhắn xác nhận này
       });
@@ -803,7 +803,7 @@ if (id.startsWith("lixi_confirm_")) {
     activeLixi.set(uniqueId, {
       creatorId: data.creatorId,
       creatorName: data.creatorName,
-      sotien: data.sotien,
+      soxu: data.soxu,
       soluong: data.soluong,
       endTime: endTime,
       claimedUsers: [], // Sẽ lưu dưới dạng Object thay vì string ID
@@ -840,7 +840,7 @@ if (id.startsWith("lixi_confirm_")) {
     }
     
     const creatorCash = money.get(data.creatorId) || 0;
-    if (creatorCash < data.sotien) {
+    if (creatorCash < data.soxu) {
       return interaction.reply({ content: "❌ Người tạo phong bao đã hết xu, không thể nhận thêm!", ephemeral: true });
     }
     
@@ -851,10 +851,10 @@ if (id.startsWith("lixi_confirm_")) {
       time: Date.now()
     });
     
-    money.set(data.creatorId, creatorCash - data.sotien);
+    money.set(data.creatorId, creatorCash - data.soxu);
     
     const receiverCash = money.get(interaction.user.id) || 0;
-    money.set(interaction.user.id, receiverCash + data.sotien);
+    money.set(interaction.user.id, receiverCash + data.soxu);
     saveData(); 
     
     const remain = data.soluong - data.claimedUsers.length;
@@ -867,7 +867,7 @@ if (id.startsWith("lixi_confirm_")) {
         
     await interaction.message.edit({ embeds: [embed] }).catch(()=>{});
     
-    interaction.reply({ content: `🎉 Chúc mừng! Bạn đã nhận được **${formatMoney(data.sotien)}** từ phong bao lì xì của **${data.creatorName}**!`, ephemeral: true });
+    interaction.reply({ content: `🎉 Chúc mừng! Bạn đã nhận được **${formatMoney(data.soxu)}** từ phong bao lì xì của **${data.creatorName}**!`, ephemeral: true });
     
     // Khi hết số lượng phong bao thì vô hiệu hóa nút nhận
     if (remain <= 0) {
@@ -906,7 +906,7 @@ if (id.startsWith("lixi_confirm_")) {
       const y = vnTime.getFullYear();
 
       const timeString = `[${h}:${m}:${s} - ${d}/${mo}/${y}]`;
-      description += `${timeString} ${user.username} + ${formatMoney(data.sotien)}\n`;
+      description += `${timeString} ${user.username} + ${formatMoney(data.soxu)}\n`;
     });
 
     const embed = new EmbedBuilder()
@@ -954,7 +954,7 @@ if (id.startsWith("lixi_confirm_")) {
     activeLixi.set(uniqueId, {
       creatorId: data.creatorId, // Lưu ID của Bot vào đây
       creatorName: data.creatorName,
-      sotien: data.sotien,
+      soxu: data.soxu,
       soluong: data.soluong,
       endTime: endTime,
       claimedUsers: [],
@@ -1545,13 +1545,13 @@ if (cmd === "stop" || cmd === "chiu") {
         name: "💰 Lệnh bình thường (Trang 1)",
         value:
           "🔹 `wew daily`: nhận phần thưởng mỗi ngày\n" +
-          "🔹 `wew tien`: xem số xu có trong ví\n" +
+          "🔹 `wew xu`: xem số xu có trong ví\n" +
           "🔹 `wew cf <số xu/all>`: cược xu 50/50\n" +
-          "🔹 `wew givetien @user <số xu>`: tặng xu cho người khác\n" +
+          "🔹 `wew givexu @user <số xu>`: tặng xu cho người khác\n" +
           "🔹 `wew gt <tên ngân hàng> <số xu>`: gửi xu vào ngân hàng\n" +
           "🔹 `wew rt <tên ngân hàng> <số xu>`: rút xu từ ngân hàng\n" +
           "🔹 `wew checknh`: kiểm tra số dư các ngân hàng\n" +
-          "🔹 `wew vaytien @user <số xu>`: yêu cầu vay xu từ người khác\n" +
+          "🔹 `wew vayxu @user <số xu>`: yêu cầu vay xu từ người khác\n" +
           "🔹 `wew trano @user`: trả nợ cho người vay\n" +
           "🔹 `wew checkno`: kiểm tra các khoản nợ của bạn\n" +
           "🔹 `wew nhapcode <tên code>`: nhập code để nhận xu",
@@ -1569,16 +1569,16 @@ if (cmd === "stop" || cmd === "chiu") {
           "🔹 `wew chiu`: đầu hàng game nối từ\n" +
           "🔹 `wew sanduangua <số ngựa> <số xu>`: chơi sàn đua ngựa\n" +
           "🔹 `wew baucua <lựa chọn> <số xu>`: chơi bầu cua\n" +
-          "🔹 `/lixi (sotien) (soluong) (thoigian)`: lì xì xu cho anh em\n" +
+          "🔹 `/lixi (soxu) (soluong) (thoigian)`: lì xì xu cho anh em\n" +
           "🔹 `/taixiu`: chơi tài xỉu\n" +
           "🔹 `wew maydanhbac`: chơi máy đánh bạc",
       })
       .addFields({
         name: "👑 ADMIN/OWNER BOT",
         value:
-          "🔹 `wew addtien <tên người> <số xu>`: thêm xu cho người khác\n" +
-          "🔹 `wew thutien <tên người> <số xu>`: thu xu từ người khác\n"+
-          "🔹 `wew checktien @user`: kiểm tra số xu của người khác\n" +
+          "🔹 `wew addxu <tên người> <số xu>`: thêm xu cho người khác\n" +
+          "🔹 `wew thuxu <tên người> <số xu>`: thu xu từ người khác\n"+
+          "🔹 `wew checkxu @user`: kiểm tra số xu của người khác\n" +
           "🔹 `wew addadmin <id>`: thêm admin\n" +
           "🔹 `wew unadmin <id>`: xóa admin\n" +
           "🔹 `wew recode <tên code>`: xóa code\n" +
@@ -1858,7 +1858,7 @@ if (cmd === "stop" || cmd === "chiu") {
 
 // LỆNH VAY TIỀN
 // LỆNH VAY TIỀN
-  if (cmd === "vaytien") {
+  if (cmd === "vayxu") {
   let target = await findGlobalUser(client, args[0]);
   let amount = parseInt(args[1]);
 
@@ -2201,7 +2201,7 @@ if (cmd === "checknh") {
   }
 
   // XEM TIỀN
-  if (cmd === "tien") {
+  if (cmd === "xu") {
     let cash = money.get(userId);
     message.reply(`💰 Số xu trong ví của bạn là: **${formatMoney(cash)}**`);
   }
@@ -2279,7 +2279,7 @@ if (cmd === "rt") {
   }
 
 // ADD TIEN
-  if (cmd === "addtien" || cmd === "add") {
+  if (cmd === "addxu" || cmd === "add") {
     if (!isAdmin(userId)) return message.reply("❌ Bạn không có quyền sử dụng lệnh này!");
     let target = await findGlobalUser(client, args[0]);
     let amount = parseInt(args[1]);
@@ -2295,7 +2295,7 @@ if (cmd === "rt") {
   }
 
 // THU TIEN
-  if (cmd === "thutien" || cmd === "thu") {
+  if (cmd === "thuxu" || cmd === "thu") {
     if (!isAdmin(userId)) return message.reply("❌ Bạn không có quyền sử dụng lệnh này!");
     let target = await findGlobalUser(client, args[0]);
     
@@ -2316,7 +2316,7 @@ if (cmd === "rt") {
   }
   
 // CHECK TIỀN NGƯỜI KHÁC
-  if (cmd === "checktien") {
+  if (cmd === "checkxu") {
     if (!isAdmin(userId)) {
       return message.reply("❌ Bạn không có quyền sử dụng lệnh này!");
     }
@@ -2626,7 +2626,7 @@ if (i.customId === "mdb_spin_btn") {
 }
 
 // GIVE
-  if (cmd === "givetien" || cmd === "give") {
+  if (cmd === "givexu" || cmd === "give") {
     let target = await findGlobalUser(client, args[0]);
     let cash = money.get(userId);
 
