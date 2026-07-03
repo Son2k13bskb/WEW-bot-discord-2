@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, Partials, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, AttachmentBuilder, ChannelType } = require('discord.js');
+const { Client, GatewayIntentBits, Partials, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, AttachmentBuilder, ChannelType, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } = require('discord.js');
 const BACKUP_CHANNEL_ID = "1517914977992708138";
 
 function parseBet(input, userCash) {
@@ -849,24 +849,51 @@ if (id?.startsWith("db_leave_")) {
 
   // Logic Toggle Ephemeral Card Hand
 // Logic hiển thị danh sách nút bài kèm gợi ý thông minh thông qua Ephemeral Message
-  if (id?.startsWith("db_showhand_")) {
-      const lobbyId = id.split("_")[2];
-      const game = activeCardGames.get(lobbyId);
-      if (!game) return interaction.reply({ content: "❌ Ván bài đã kết thúc hoặc không tồn tại!", ephemeral: true });
-      
-      const pIndex = game.players.findIndex(p => p.id === interaction.user.id);
-      if (pIndex === -1) return interaction.reply({ content: "❌ Bạn không tham gia trong ván bài này!", ephemeral: true });
-      
-      const pHand = game.players[pIndex].hand;
-      const handAnalysisText = analyzeHandToText(pHand); // Xuất cấu trúc chuỗi phân tích "2 3 3 ... (đôi 3)"
-      const actionRows = generateHandButtons(pHand, lobbyId);
-      
-      return interaction.reply({ 
-        content: `**Bài trên tay bạn:**\n👉 \`${handAnalysisText}\`\n*(Vui lòng bấm trực tiếp lá bài bạn muốn đánh hạp lệ bên dưới)*:`, 
-        components: actionRows, 
+if (id?.startsWith("db_showhand_")) {
+    const lobbyId = id.split("_")[2];
+    const game = activeCardGames.get(lobbyId);
+    if (!game) return interaction.reply({ content: "❌ Ván bài đã kết thúc!", ephemeral: true });
+    
+    const pIndex = game.players.findIndex(p => p.id === interaction.user.id);
+    if (pIndex === -1) return interaction.reply({ content: "❌ Bạn không tham gia!", ephemeral: true });
+    
+    const pHand = game.players[pIndex].hand; // Cần sort bài trước cho đẹp
+    
+    // Tự động phân tích các Combo có thể đánh (Đôi, Sảnh, Tứ Quý) từ tay bài
+    const comboOptions = getAvailableCombos(pHand); // Bạn cần viết hàm phân tích này
+    
+    const selectMenu = new StringSelectMenuBuilder()
+        .setCustomId(`db_playcombo_${lobbyId}`)
+        .setPlaceholder('Chọn bài để đánh...')
+        .setMinValues(1)
+        .setMaxValues(1);
+
+    // Thêm các lá bài đơn
+    pHand.forEach((card, idx) => {
+        selectMenu.addOptions(
+            new StringSelectMenuOptionBuilder()
+                .setLabel(`${card.rank}${card.suit}`)
+                .setValue(`single_${card.rank}_${card.suit}`)
+        );
+    });
+
+    // Thêm các lựa chọn Combo (Ví dụ)
+    comboOptions.forEach(combo => {
+        selectMenu.addOptions(
+            new StringSelectMenuOptionBuilder()
+                .setLabel(combo.label) // VD: "Đôi 3", "Tứ Quý 2"
+                .setValue(combo.value) // VD: "pair_3", "quad_2"
+        );
+    });
+
+    const actionRow = new ActionRowBuilder().addComponents(selectMenu);
+    
+    return interaction.reply({ 
+        content: `**Bài trên tay bạn:**\n*(Chọn lá lẻ hoặc bộ từ menu thả xuống bên dưới)*`, 
+        components: [actionRow], 
         ephemeral: true 
-      });
-  }
+    });
+}
 
   // Xử lý sự kiện bấm nút "Bỏ Qua Lượt" trực tiếp
   if (id?.startsWith("db_pass_")) {
@@ -906,15 +933,20 @@ if (id?.startsWith("db_leave_")) {
           return interaction.reply({ content: "❌ Lá bài này không còn trên tay bạn!", ephemeral: true });
       }
 
-      // [LUẬT CHƠI] Kiểm tra tính đúng đắn đồng màu đồng chất của Miền Bắc nếu có bài trên bàn trước đó
-      if (game.mode === "tlmb" && game.tableCards) {
-          // Check đơn giản cùng màu theo yêu cầu của Tiến Lên Miền Bắc
-          const isRed = (s) => s === '♦' || s === '♥';
+      // [LUẬT CHƠI] Kiểm tra bài đánh ra có lớn hơn bài trên bàn không
+      if (game.tableCards) {
+          // Tách rank và suit của lá trên bàn (Giả sử bàn đang là lá đơn)
+          // LƯU Ý: Nếu sau này phát triển đánh bộ, cần hàm parse tableCards phức tạp hơn.
+          const tableRank = game.tableCards.slice(0, -1);
           const tableSuit = game.tableCards.slice(-1);
-          if (isRed(suit) !== isRed(tableSuit)) {
-              return interaction.reply({ content: "Luật miền Bắc bắt buộc đánh cùng màu chất (Đỏ chặn Đỏ, Đen chặn Đen)!", ephemeral: true });
+          
+          if (!isCardHigher(rank, suit, tableRank, tableSuit, game.mode)) {
+              return interaction.reply({ content: `❌ Lá \`${rank}${suit}\` không thể chặt được \`${game.tableCards}\`!`, ephemeral: true });
           }
       }
+
+      // Nếu hợp lệ -> Thực thi gỡ lá bài ra khỏi tay và đặt lên sàn đấu
+      playerHand.splice(cardIdx, 1);
 
       // Thực thi gỡ lá bài ra khỏi tay và đặt lên sàn đấu
       playerHand.splice(cardIdx, 1);
@@ -3048,28 +3080,33 @@ async function startDanhBaiGame(client, lobbyId) {
     }, 2000);
 }
 
-async function updateGameUI(client, lobbyId) {
+async function updateGameUI(client, lobbyId, actionText) {
     const game = activeCardGames.get(lobbyId);
     if (!game) return;
+    
     const thread = client.channels.cache.get(game.threadId);
     if (!thread) return;
 
-    const currentPlayer = game.players[game.currentTurn];
-    const endTime = Math.floor((Date.now() + 20 * 1000) / 1000); // 20 giây mỗi lượt
+    // ... (Tạo cái EmbedBuilder mới dựa trên tình trạng game hiện tại) ...
+    const gameEmbed = new EmbedBuilder()
+        .setTitle("♣️ Bàn Đánh Bài ♠️")
+        .setDescription(actionText + `\n\nĐang tới lượt của: <@${game.players[game.currentTurn].id}>`)
+        // ... Thêm các field hiển thị số bài còn lại, bài trên bàn ...
 
-    const embed = new EmbedBuilder()
-        .setTitle("Ván bài")
-        .setDescription(`Đến lượt của: **${currentPlayer.name}**\nThời gian lượt còn lại: <t:${endTime}:R>\nBài đánh ra hiện tại là: **${game.lastPlayed}**`)
-        .setColor("#ffcc00");
-
-    const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`db_showhand_${lobbyId}`).setLabel("Hiển thị Bài").setStyle(ButtonStyle.Primary)
-    );
-
-    try {
-        const msg = await thread.messages.fetch(game.gameMessageId);
-        await msg.edit({ embeds: [embed], components: [row] });
-    } catch (err) {}
+    // Gửi mới nếu chưa có, Edit nếu đã có
+    if (!game.mainMessageId) {
+        const msg = await thread.send({ content: `<@${game.players[game.currentTurn].id}> Tới lượt bạn!`, embeds: [gameEmbed] });
+        game.mainMessageId = msg.id; // Lưu lại ID
+    } else {
+        try {
+            const mainMsg = await thread.messages.fetch(game.mainMessageId);
+            await mainMsg.edit({ content: `<@${game.players[game.currentTurn].id}> Tới lượt bạn!`, embeds: [gameEmbed] });
+        } catch (err) {
+            // Fallback nếu tin nhắn vô tình bị xóa
+            const msg = await thread.send({ content: `<@${game.players[game.currentTurn].id}> Tới lượt bạn!`, embeds: [gameEmbed] });
+            game.mainMessageId = msg.id;
+        }
+    }
 }
 
 function generateHandButtons(hand, lobbyId) {
@@ -3100,9 +3137,32 @@ function generateHandButtons(hand, lobbyId) {
 
 // Hàm chuyển đổi giá trị để so sánh bài Tiến Lên
 function getCardValue(rank, suit) {
-  const rankValues = { '3':3, '4':4, '5':5, '6':6, '7':7, '8':8, '9':9, '10':10, 'J':11, 'Q':12, 'K':13, 'A':14, '2':15 };
-  const suitValues = { '♠': 1, '♣': 2, '♦': 3, '♥': 4 };
+const rankValues = {
+  '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '10': 10,
+  'J': 11, 'Q': 12, 'K': 13, 'A': 14, '2': 15
+};
+const suitValues = { '♠': 1, '♣': 2, '♦': 3, '♥': 4 };
   return { rank: rankValues[rank], suit: suitValues[suit] };
+}
+
+function isCardHigher(playRank, playSuit, tableRank, tableSuit, mode) {
+    const pRankVal = rankValues[playRank];
+    const tRankVal = rankValues[tableRank];
+    
+    // Nếu giá trị lớn hơn hẳn -> ăn
+    if (pRankVal > tRankVal) return true;
+    
+    // Nếu bằng giá trị, xét chất (Miền Nam và Miền Bắc đều xét chất ở lá đơn)
+    if (pRankVal === tRankVal) {
+        if (mode === "tlmb") {
+            // Miền Bắc: Bắt buộc đồng màu (Đen chặn Đen, Đỏ chặn Đỏ)
+            const isPlayRed = playSuit === '♦' || playSuit === '♥';
+            const isTableRed = tableSuit === '♦' || tableSuit === '♥';
+            if (isPlayRed !== isTableRed) return false;
+        }
+        return suitValues[playSuit] > suitValues[tableSuit];
+    }
+    return false;
 }
 
 // Phân tích bài cầm trên tay để hiển thị gợi ý (Đôi, Ba, Sảnh...) theo yêu cầu
