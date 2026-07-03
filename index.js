@@ -386,6 +386,36 @@ function getLuck(userId, defaultRate) {
   return defaultRate;
 }
 
+function getAvailableCombos(hand) {
+    // Khung hàm cơ bản để chống crash. Cần tự phát triển thêm logic phân tích (đôi, sảnh, tứ quý).
+    return []; 
+}
+
+async function handlePlayerPass(client, lobbyId, userId, isTimeout) {
+    const game = activeCardGames.get(lobbyId);
+    if (!game) return;
+    
+    game.passedPlayers = game.passedPlayers || new Set();
+    game.passedPlayers.add(userId);
+    
+    let nextTurn = game.currentTurn;
+    let allPassed = true;
+    
+    // Tìm người chơi tiếp theo chưa bỏ lượt
+    for (let i = 0; i < game.players.length; i++) {
+        nextTurn = (nextTurn + 1) % game.players.length;
+        if (!game.passedPlayers.has(game.players[nextTurn].id)) {
+            game.currentTurn = nextTurn;
+            allPassed = false;
+            break;
+        }
+    }
+    
+    if (typeof updateGameUI === "function") {
+        updateGameUI(client, lobbyId, `**${userId}** đã bỏ qua lượt.`);
+    }
+}
+
 function addLog(user, command, guild) {
   const logData = {
     user: user.username,
@@ -851,50 +881,68 @@ if (id?.startsWith("db_leave_")) {
   // Logic Toggle Ephemeral Card Hand
 // Logic hiển thị danh sách nút bài kèm gợi ý thông minh thông qua Ephemeral Message
 if (id?.startsWith("db_showhand_")) {
-    const lobbyId = id.split("_")[2];
-    const game = activeCardGames.get(lobbyId);
-    if (!game) return interaction.reply({ content: "❌ Ván bài đã kết thúc!", ephemeral: true });
-    
-    const pIndex = game.players.findIndex(p => p.id === interaction.user.id);
-    if (pIndex === -1) return interaction.reply({ content: "❌ Bạn không tham gia!", ephemeral: true });
-    
-    const pHand = game.players[pIndex].hand; // Cần sort bài trước cho đẹp
-    
-    // Tự động phân tích các Combo có thể đánh (Đôi, Sảnh, Tứ Quý) từ tay bài
-    const comboOptions = getAvailableCombos(pHand); // Bạn cần viết hàm phân tích này
-    
-    const selectMenu = new StringSelectMenuBuilder()
-        .setCustomId(`db_playcombo_${lobbyId}`)
-        .setPlaceholder('Chọn bài để đánh...')
-        .setMinValues(1)
-        .setMaxValues(1);
+      const lobbyId = id.split("_")[2];
+      const game = activeCardGames.get(lobbyId);
+      if (!game) return interaction.reply({ content: "❌ Ván bài đã kết thúc!", ephemeral: true });
+      
+      const pIndex = game.players.findIndex(p => p.id === interaction.user.id);
+      if (pIndex === -1) return interaction.reply({ content: "❌ Bạn không tham gia!", ephemeral: true });
+      
+      const pHand = game.players[pIndex].hand || []; 
+      
+      // Bọc try-catch an toàn để không bị sập tương tác
+      let comboOptions = [];
+      try {
+          if (typeof getAvailableCombos === "function") {
+              comboOptions = getAvailableCombos(pHand);
+          }
+      } catch (e) {
+          console.error("Lỗi getAvailableCombos:", e);
+      }
+      
+      const selectMenu = new StringSelectMenuBuilder()
+          .setCustomId(`db_playcombo_${lobbyId}`)
+          .setPlaceholder('Chọn bài để đánh...')
+          .setMinValues(1)
+          .setMaxValues(1);
 
-    // Thêm các lá bài đơn
-    pHand.forEach((card, idx) => {
-        selectMenu.addOptions(
-            new StringSelectMenuOptionBuilder()
-                .setLabel(`${card.rank}${card.suit}`)
-                .setValue(`single_${card.rank}_${card.suit}`)
-        );
-    });
+      // Thêm các lá bài đơn
+      if (pHand.length > 0) {
+          pHand.forEach((card, idx) => {
+              selectMenu.addOptions(
+                  new StringSelectMenuOptionBuilder()
+                      .setLabel(`${card.rank}${card.suit}`)
+                      .setValue(`single_${card.rank}_${card.suit}`)
+              );
+          });
+      } else {
+          // Tránh lỗi StringSelectMenuBuilder yêu cầu ít nhất 1 Option
+          selectMenu.addOptions(
+              new StringSelectMenuOptionBuilder()
+                  .setLabel("Không còn bài")
+                  .setValue("empty")
+          );
+      }
 
-    // Thêm các lựa chọn Combo (Ví dụ)
-    comboOptions.forEach(combo => {
-        selectMenu.addOptions(
-            new StringSelectMenuOptionBuilder()
-                .setLabel(combo.label) // VD: "Đôi 3", "Tứ Quý 2"
-                .setValue(combo.value) // VD: "pair_3", "quad_2"
-        );
-    });
+      // Thêm các lựa chọn Combo nếu có
+      if (comboOptions && comboOptions.length > 0) {
+          comboOptions.forEach(combo => {
+              selectMenu.addOptions(
+                  new StringSelectMenuOptionBuilder()
+                      .setLabel(combo.label)
+                      .setValue(combo.value)
+              );
+          });
+      }
 
-    const actionRow = new ActionRowBuilder().addComponents(selectMenu);
-    
-    return interaction.reply({ 
-        content: `**Bài trên tay bạn:**\n*(Chọn lá lẻ hoặc bộ từ menu thả xuống bên dưới)*`, 
-        components: [actionRow], 
-        ephemeral: true 
-    });
-}
+      const actionRow = new ActionRowBuilder().addComponents(selectMenu);
+      
+      return interaction.reply({ 
+          content: `**Bài trên tay bạn:**\n*(Chọn lá lẻ hoặc bộ từ menu thả xuống bên dưới)*`, 
+          components: [actionRow], 
+          ephemeral: true 
+      }).catch(err => console.error("Lỗi hiển thị bài:", err));
+  }
 
   // Xử lý sự kiện bấm nút "Bỏ Qua Lượt" trực tiếp
   if (id?.startsWith("db_pass_")) {
@@ -907,8 +955,14 @@ if (id?.startsWith("db_showhand_")) {
           return interaction.reply({ content: "⚠️ Chưa đến lượt của bạn để thực hiện bỏ qua!", ephemeral: true });
       }
 
-      await interaction.deferUpdate();
-      await handlePlayerPass(client, lobbyId, interaction.user.id, false);
+      try {
+          await interaction.deferUpdate();
+          if (typeof handlePlayerPass === "function") {
+              await handlePlayerPass(client, lobbyId, interaction.user.id, false);
+          }
+      } catch (error) {
+          console.error("Lỗi Pass Lượt:", error);
+      }
       return;
   }
 
