@@ -501,7 +501,8 @@ client.on("interactionCreate", async (interaction) => {
       }
 
       // Xử lý đếm ngược 5 phút
-      setTimeout(async () => {
+      // Lưu biến đếm thời gian đăng ký vào sảnh
+      const lobbyTimer = setTimeout(async () => {
         const lobby = activeLobbies.get(lobbyId);
         if (lobby && !activeCardGames.has(lobbyId)) {
           const updatedEmbed = EmbedBuilder.from(embed).spliceFields(3, 1, { name: "Thời gian:", value: "Đã hết thời gian để tham gia", inline: false });
@@ -521,6 +522,8 @@ client.on("interactionCreate", async (interaction) => {
           }
         }
       }, 5 * 60 * 1000);
+
+      activeLobbies.get(lobbyId).timerRef = lobbyTimer; // Cực kì quan trọng
       return;
     }
 
@@ -770,7 +773,77 @@ if (interaction.isChatInputCommand() && interaction.commandName === "taixiu") {
     return;
   }
 
-if (!interaction.isButton() && !interaction.isModalSubmit()) return;
+// Mở rộng bộ lọc: Chấp nhận cả Button, Modal và StringSelectMenu tránh lỗi "Tương tác này không thành công"
+  if (!interaction.isButton() && !interaction.isModalSubmit() && !interaction.isStringSelectMenu()) return;
+
+  const id = interaction.customId;
+
+  // ================= XỬ LÝ CHỌN LÁ BÀI TỪ MENU THẢ XUỐNG =================
+  if (interaction.isStringSelectMenu() && id?.startsWith("db_playcombo_")) {
+    const lobbyId = id.split("_")[2];
+    const game = activeCardGames.get(lobbyId);
+    if (!game) return interaction.reply({ content: "❌ Ván bài đã kết thúc!", ephemeral: true });
+
+    if (game.players[game.currentTurn].id !== interaction.user.id) {
+      return interaction.reply({ content: "⚠️ Vui lòng đợi đến lượt của bạn!", ephemeral: true });
+    }
+
+    const selectedValue = interaction.values[0];
+    if (selectedValue === "empty") {
+      return interaction.reply({ content: "❌ Bạn đã hết sạch bài trên tay!", ephemeral: true });
+    }
+
+    // Xử lý khi chọn đánh một lá bài đơn từ Menu thả xuống
+    if (selectedValue.startsWith("single_")) {
+      const [, rank, suit] = selectedValue.split("_");
+      const pIndex = game.players.findIndex(p => p.id === interaction.user.id);
+      const playerHand = game.players[pIndex].hand;
+      const cardIdx = playerHand.findIndex(c => c.rank === rank && c.suit === suit);
+
+      if (cardIdx === -1) {
+        return interaction.reply({ content: "❌ Lá bài này không còn tồn tại trên tay bạn!", ephemeral: true });
+      }
+
+      // Kiểm tra luật chặt bài đơn
+      if (game.tableCards) {
+        const tableRank = game.tableCards.slice(0, -1);
+        const tableSuit = game.tableCards.slice(-1);
+        
+        if (!isCardHigher(rank, suit, tableRank, tableSuit, game.mode)) {
+          return interaction.reply({ content: `❌ Lá \`${rank}${suit}\` không thể chặn quân bài \`${game.tableCards}\` trên bàn!`, ephemeral: true });
+        }
+      }
+
+      // Xóa bài ra khỏi tay (Đã sửa lỗi splice 2 lần trùng lặp ở bản cũ)
+      playerHand.splice(cardIdx, 1);
+      const playedCardText = `${rank}${suit}`;
+      game.tableCards = playedCardText;
+      game.lastPlayedBy = interaction.user.id;
+
+      // Check win
+      if (playerHand.length === 0) {
+        if (cardTurnTimers.has(lobbyId)) clearTimeout(cardTurnTimers.get(lobbyId));
+        activeCardGames.delete(lobbyId);
+        activeLobbies.delete(lobbyId);
+        return interaction.update({ content: `🎉 **Chúc mừng bạn đã đánh hết bài và giành chiến thắng ván đấu này!**`, components: [] });
+      }
+
+      // Chuyển lượt
+      let nextTurn = game.currentTurn;
+      for (let i = 0; i < game.players.length; i++) {
+        nextTurn = (nextTurn + 1) % game.players.length;
+        if (!game.passedPlayers.has(game.players[nextTurn].id)) {
+          game.currentTurn = nextTurn;
+          break;
+        }
+      }
+      
+      await interaction.deferUpdate();
+      // Thực hiện cập nhật trực tiếp trên chính 1 Embed duy nhất
+      updateGameUI(client, lobbyId, `**${interaction.user.username}** vừa hạ quân bài: \`${playedCardText}\``);
+    }
+    return;
+  }
 
 // --- NÚT BẤM VÀ MODAL ĐÁNH BÀI ---
   if (id?.startsWith("db_join_")) {
@@ -798,10 +871,20 @@ if (!interaction.isButton() && !interaction.isModalSubmit()) return;
       return interaction.showModal(modal);
     } else {
       lobby.players.push({ id: interaction.user.id, name: interaction.user.username, bet: 0 });
-      updateLobbyUI(client, lobby);
+      
+      // Cập nhật lại giao diện embed chính ngay khi có người vào/ra sảnh
+      await updateLobbyUI(client, lobby);
+      
       const thread = client.channels.cache.get(lobby.threadId);
       if (thread) await thread.members.add(interaction.user.id).catch(()=>{});
-      return interaction.reply({ content: "✅ Đã tham gia thành công!", ephemeral: true });
+      
+      await interaction.reply({ content: "✅ Đã tham gia sảnh chơi vui thành công!", ephemeral: true });
+
+      // [BỔ SUNG KHÔNG TRẦN TRỪ]: Nếu đủ số người tối đa ở chế độ Chơi Vui -> Bắt đầu luôn lập tức!
+      if (lobby.players.length === lobby.maxPlayers) {
+        startDanhBaiGame(client, lobbyId);
+      }
+      return;
     }
   }
 
@@ -3135,33 +3218,52 @@ async function startDanhBaiGame(client, lobbyId) {
     }, 2000);
 }
 
-async function updateGameUI(client, lobbyId, actionText) {
-    const game = activeCardGames.get(lobbyId);
-    if (!game) return;
-    
-    const thread = client.channels.cache.get(game.threadId);
+async function updateGameUI(client, lobbyId, statusMessage = "") {
+  const game = activeCardGames.get(lobbyId);
+  const lobby = activeLobbies.get(lobbyId);
+  if (!game || !lobby) return;
+
+  try {
+    const thread = await client.channels.fetch(lobby.threadId).catch(() => null);
     if (!thread) return;
 
-    // ... (Tạo cái EmbedBuilder mới dựa trên tình trạng game hiện tại) ...
-    const gameEmbed = new EmbedBuilder()
-        .setTitle("♣️ Bàn Đánh Bài ♠️")
-        .setDescription(actionText + `\n\nĐang tới lượt của: <@${game.players[game.currentTurn].id}>`)
-        // ... Thêm các field hiển thị số bài còn lại, bài trên bàn ...
+    let turnPlayer = game.players[game.currentTurn];
+    let description = `🃏 **Bài trên bàn:** \`${game.tableCards || "Trống"}\`\n`;
+    if (statusMessage) description += `💬 ${statusMessage}\n`;
+    description += `\n👉 Lượt hiện tại: **${turnPlayer.name}**\n\n**Danh sách người chơi:**\n`;
 
-    // Gửi mới nếu chưa có, Edit nếu đã có
-    if (!game.mainMessageId) {
-        const msg = await thread.send({ content: `<@${game.players[game.currentTurn].id}> Tới lượt bạn!`, embeds: [gameEmbed] });
-        game.mainMessageId = msg.id; // Lưu lại ID
-    } else {
-        try {
-            const mainMsg = await thread.messages.fetch(game.mainMessageId);
-            await mainMsg.edit({ content: `<@${game.players[game.currentTurn].id}> Tới lượt bạn!`, embeds: [gameEmbed] });
-        } catch (err) {
-            // Fallback nếu tin nhắn vô tình bị xóa
-            const msg = await thread.send({ content: `<@${game.players[game.currentTurn].id}> Tới lượt bạn!`, embeds: [gameEmbed] });
-            game.mainMessageId = msg.id;
-        }
+    game.players.forEach((p, idx) => {
+      const cardCount = p.hand ? p.hand.length : 0;
+      const isCurrent = idx === game.currentTurn ? "➡️ " : "▪️ ";
+      const passedText = (game.passedPlayers && game.passedPlayers.has(p.id)) ? " *(Đã bỏ lượt)*" : "";
+      description += `${isCurrent}**${p.name}**: ${cardCount} lá${passedText}\n`;
+    });
+
+    const embed = new EmbedBuilder()
+      .setTitle("♠️ TRẬN ĐẤU TIẾN LÊN ♣️")
+      .setDescription(description)
+      .setColor("#00ff99");
+
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`db_showhand_${lobbyId}`).setLabel("Xem bài của bạn").setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId(`db_pass_${lobbyId}`).setLabel("Bỏ lượt").setStyle(ButtonStyle.Danger)
+    );
+
+    // KIỂM TRA: Nếu đã có tin nhắn embed rồi thì EDIT chứ không SEND mới
+    if (game.gameMessageId) {
+      const msg = await thread.messages.fetch(game.gameMessageId).catch(() => null);
+      if (msg) {
+        await msg.edit({ embeds: [embed], components: [row] });
+        return;
+      }
     }
+
+    // Nếu chưa có (Bắt đầu trận), gửi mới và lưu ID lại
+    const newMsg = await thread.send({ embeds: [embed], components: [row] });
+    game.gameMessageId = newMsg.id;
+  } catch (err) {
+    console.error("Lỗi cập nhật Game UI:", err);
+  }
 }
 
 function generateHandButtons(hand, lobbyId) {
@@ -3200,25 +3302,24 @@ const suitValues = { '♠': 1, '♣': 2, '♦': 3, '♥': 4 };
   return { rank: rankValues[rank], suit: suitValues[suit] };
 }
 
-function isCardHigher(playRank, playSuit, tableRank, tableSuit, mode) {
-    const pRankVal = rankValues[playRank];
-    const tRankVal = rankValues[tableRank];
-    
-    // Nếu giá trị lớn hơn hẳn -> ăn
-    if (pRankVal > tRankVal) return true;
-    
-    // Nếu bằng giá trị, xét chất (Miền Nam và Miền Bắc đều xét chất ở lá đơn)
-    if (pRankVal === tRankVal) {
-        if (mode === "tlmb") {
-            // Miền Bắc: Bắt buộc đồng màu (Đen chặn Đen, Đỏ chặn Đỏ)
-            const isPlayRed = playSuit === '♦' || playSuit === '♥';
-            const isTableRed = tableSuit === '♦' || tableSuit === '♥';
-            if (isPlayRed !== isTableRed) return false;
-        }
-        return suitValues[playSuit] > suitValues[tableSuit];
-    }
-    return false;
+function isCardHigher(rank1, suit1, rank2, suit2, mode) {
+  const r1 = ranks.indexOf(rank1);
+  const r2 = ranks.indexOf(rank2);
+  if (r1 !== r2) return r1 > r2;
+  return suits.indexOf(suit1) > suits.indexOf(suit2);
 }
+
+function dealCards(num) {
+  let hand = [];
+  for(let i = 0; i < num; i++) {
+    const r = ranks[Math.floor(Math.random() * ranks.length)];
+    const s = suits[Math.floor(Math.random() * suits.length)];
+    hand.push({ rank: r, suit: s });
+  }
+  return hand;
+}
+
+
 
 // Phân tích bài cầm trên tay để hiển thị gợi ý (Đôi, Ba, Sảnh...) theo yêu cầu
 function analyzeHandToText(hand) {
@@ -3267,36 +3368,29 @@ function analyzeHandToText(hand) {
 }
 
 // Hàm khởi tạo bàn game chính thức
-async function startDanhBaiGame(client, lobbyId) {
+function startDanhBaiGame(client, lobbyId) {
   const lobby = activeLobbies.get(lobbyId);
   if (!lobby) return;
 
-  // Tạo bộ bài 52 lá và xáo bài
-  let deck = [];
-  suits.forEach(s => ranks.forEach(r => deck.push({ rank: r, suit: s })));
-  deck.sort(() => Math.random() - 0.5);
+  // Hủy ngay bộ đếm thời gian chờ 5 phút ban đầu để tránh bị lặp trận hoặc kéo dài ván
+  if (lobby.timerRef) clearTimeout(lobby.timerRef);
 
-  // Chia bài cho mọi người (Mỗi người 13 lá)
-  const gamePlayers = lobby.players.map((p, idx) => {
-    return {
+  const game = {
+    players: lobby.players.map(p => ({
       id: p.id,
       name: p.name,
-      isBot: p.isBot || false,
-      hand: deck.slice(idx * 13, (idx + 1) * 13)
-    };
-  });
-
-  activeCardGames.set(lobbyId, {
-    lobbyId,
-    players: gamePlayers,
+      hand: dealCards(13), // Chia 13 lá bài
+      isBot: p.isBot || false
+    })),
     currentTurn: 0,
-    lastPlayedBy: null,
-    tableCards: null, // Bài hiện tại đang có trên bàn
-    passedPlayers: new Set(), // Lưu danh sách ID người đã bỏ qua vòng này
-    mode: lobby.loaiBai // 'tlmn' hoặc 'tlmb'
-  });
+    tableCards: null,
+    passedPlayers: new Set(),
+    gameMessageId: null,
+    mode: lobby.loaiBai
+  };
 
-  updateGameUI(client, lobbyId, "🃏 Trận đấu bắt đầu! Lượt đầu tiên hãy đánh bài.");
+  activeCardGames.set(lobbyId, game);
+  updateGameUI(client, lobbyId, "Trận đấu đã chính thức bắt đầu! Hãy nhấn nút dưới đây để xem bài.");
 }
 
 // Hàm cập nhật giao diện tổng quan bàn đấu trong Thread
@@ -3416,27 +3510,29 @@ function generateHandButtons(hand, lobbyId) {
 
 // Hàm cập nhật trạng thái sảnh chờ ban đầu
 async function updateLobbyUI(client, lobby) {
-  const channel = client.channels.cache.get(lobby.channelId);
-  if (!channel) return;
-
   try {
-    const msg = await channel.messages.fetch(lobby.messageId);
+    const channel = await client.channels.fetch(lobby.channelId).catch(() => null);
+    if (!channel) return;
+    const msg = await channel.messages.fetch(lobby.messageId).catch(() => null);
+    if (!msg) return;
+
     const endTimestamp = Math.floor(lobby.endTime / 1000);
+    const isTien = lobby.cheDo === "tien";
 
     const embed = new EmbedBuilder()
       .setTitle("♣️ Đánh bài ăn tiền ♠️")
       .setDescription(`**Bản chơi:** ${lobby.loaiBai === "tlmn" ? "Tiến Lên Miền Nam" : "Tiến Lên Miền Bắc"}`)
       .addFields(
         { name: "Số người chơi tối đa:", value: `${lobby.maxPlayers}`, inline: true },
-        { name: "Số người chơi đã tham gia:", value: `${lobby.players.length}/${lobby.maxPlayers}`, inline: true },
-        { name: "Có chơi ăn tiền:", value: lobby.cheDo === "tien" ? "Có" : "Không", inline: true },
-        { name: "Thời gian:", value: `Đóng đăng ký <t:${endTimestamp}:R>`, inline: false }
+        { name: "Số người chơi đã tham gia:", value: `${lobby.players.length}/${lobby.maxPlayers}`, inline: true }, // Cập nhật động số lượng tại đây
+        { name: "Có chơi ăn tiền:", value: isTien ? "Có" : "Không", inline: true },
+        { name: "Thời gian:", value: lobby.players.length >= lobby.maxPlayers ? "Trận đấu đã bắt đầu!" : `Đóng đăng ký <t:${endTimestamp}:R>`, inline: false }
       )
       .setColor("#ffcc00");
 
     await msg.edit({ embeds: [embed] });
   } catch (err) {
-    console.log(err);
+    console.error("Lỗi cập nhật Lobby UI:", err);
   }
 }
 
