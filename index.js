@@ -96,6 +96,7 @@ const allowedIDs = [
   "1314899740114026529",
   "1498208530111664158",
   "1506110804871872624",
+  "1406503641258655910",
 ];
 
 const MAIN_OWNER_ID = "1174672220065366049";
@@ -422,7 +423,7 @@ client.on("interactionCreate", async (interaction) => {
       const lobbyId = Date.now().toString();
       const isTien = cheDo === "tien";
 
-      const endTime = Math.floor((Date.now() + 5 * 60 * 1000) / 1000); // 5 phút
+      const endTime = Math.floor((Date.now() + 2 * 60 * 1000) / 1000); // 2 phút
 
       const embed = new EmbedBuilder()
         .setTitle("♣️ Đánh bài ăn tiền ♠️")
