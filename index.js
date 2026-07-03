@@ -776,8 +776,6 @@ if (interaction.isChatInputCommand() && interaction.commandName === "taixiu") {
 // Mở rộng bộ lọc: Chấp nhận cả Button, Modal và StringSelectMenu tránh lỗi "Tương tác này không thành công"
   if (!interaction.isButton() && !interaction.isModalSubmit() && !interaction.isStringSelectMenu()) return;
 
-  const id = interaction.customId;
-
   // ================= XỬ LÝ CHỌN LÁ BÀI TỪ MENU THẢ XUỐNG =================
   if (interaction.isStringSelectMenu() && id?.startsWith("db_playcombo_")) {
     const lobbyId = id.split("_")[2];
