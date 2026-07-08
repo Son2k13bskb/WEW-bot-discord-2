@@ -1123,8 +1123,9 @@ if (id?.startsWith("tx_") || (interaction.isModalSubmit() && id?.startsWith("tx_
       return interaction.reply({ content: "❌ Ván game đã kết thúc!", ephemeral: true });
     }
 
-if (interaction.isModalSubmit()) {
-      const betType = customId.split("_")[2];
+    if (interaction.isModalSubmit()) {
+      const parts = customId.split("_");
+      const betType = parts.slice(2, -1).join("_");
       let amount = parseInt(interaction.fields.getTextInputValue("amount"));
 
       if (isNaN(amount) || amount <= 0 || amount > 1000000) {
@@ -1148,11 +1149,10 @@ if (interaction.isModalSubmit()) {
       });
     }
 
-// Xử lý khi người dùng bấm nút (Mở Modal)
+    // Xử lý khi người dùng bấm nút (Mở Modal)
     if (interaction.isButton()) {
       const parts = customId.split("_");
       let betType;
-
       if (parts[1] === "num") {
         betType = `num_${parts[2]}`;
       } else {
@@ -1169,9 +1169,16 @@ if (interaction.isModalSubmit()) {
         .setRequired(true);
 
       modal.addComponents(new ActionRowBuilder().addComponents(input));
-      return interaction.showModal(modal);
+      
+      try {
+        await interaction.showModal(modal);
+      } catch (err) {
+        console.error("Lỗi showModal Tài Xỉu:", err);
+        await interaction.reply({ content: "❌ Không thể hiện cửa sổ nhập cược. Vui lòng thử lại.", ephemeral: true });
+      }
+      return;
     }
-  }
+}
 
 async function startTaiXiuCountdown(channel, gameId, channelId) {
   let game = activeTaiXiu.get(channelId);
