@@ -130,6 +130,10 @@ let wordDictionary = [
 const { REST, Routes, SlashCommandBuilder } = require("discord.js");
 
 const slashCommands = [
+    new SlashCommandBuilder()
+    .setName("menu")
+    .setDescription("Hiển thị danh sách các lệnh của bot")
+    .toJSON(),
   new SlashCommandBuilder()
     .setName("danhbai")
     .setDescription("Chơi đánh bài Tiến Lên Miền Nam / Miền Bắc")
@@ -445,6 +449,69 @@ client.on("interactionCreate", async (interaction) => {
   const id = interaction.customId; // Khai báo id ở đầu
   
   if (interaction.isChatInputCommand()) {
+
+    if (interaction.commandName === "menu") {
+  const embed = new EmbedBuilder()
+    .setColor("#f5d400")
+    .setTitle("🏛️ Các lệnh của WEW")
+    .setDescription("Danh sách các lệnh của bot")
+    .addFields({
+      name: "💰 Lệnh bình thường (Trang 1)",
+      value:
+        "🔹 `wew daily`: nhận phần thưởng mỗi ngày\n" +
+        "🔹 `wew xu`: xem số xu có trong ví\n" +
+        "🔹 `wew cf <số xu/all>`: cược xu 50/50\n" +
+        "🔹 `wew givexu @user <số xu>`: tặng xu cho người khác\n" +
+        "🔹 `wew gt <tên ngân hàng> <số xu>`: gửi xu vào ngân hàng\n" +
+        "🔹 `wew rt <tên ngân hàng> <số xu>`: rút xu từ ngân hàng\n" +
+        "🔹 `wew checknh`: kiểm tra số dư các ngân hàng\n" +
+        "🔹 `wew vayxu @user <số xu>`: yêu cầu vay xu từ người khác\n" +
+        "🔹 `wew trano @user`: trả nợ cho người vay\n" +
+        "🔹 `wew checkno`: kiểm tra các khoản nợ của bạn\n" +
+        "🔹 `wew nhapcode <tên code>`: nhập code để nhận xu"
+    })
+    .addFields({
+      name: "💰 Lệnh bình thường (Trang 2)",
+      value:
+        "🔹 `wew topdaigia`: xem bảng xếp hạng đại gia trong server\n" +
+        "🔹 `wew adminlist`: xem danh sách admin/owner\n" +
+        "🔹 `wew muaveso`: mua vé số\n" +
+        "🔹 `wew quaymayman`: quay vòng quay may mắn\n" +
+        "🔹 `wew keobuabao`: chơi kéo búa bao với mọi người trong channel\n" +
+        "🔹 `wew start`: Bắt đầu chơi game nối từ (người vs bot)\n" +
+        "🔹 `wew stop`: Dừng chơi game nối từ hiện tại\n" +
+        "🔹 `wew chiu`: đầu hàng game nối từ\n" +
+        "🔹 `wew sanduangua <số ngựa> <số xu>`: chơi sàn đua ngựa\n" +
+        "🔹 `wew baucua <lựa chọn> <số xu>`: chơi bầu cua\n" +
+        "🔹 `/lixi (soxu) (soluong) (thoigian)`: lì xì xu cho anh em\n" +
+        "🔹 `/taixiu`: chơi tài xỉu\n" +
+        "🔹 `wew maydanhbac`: chơi máy đánh bạc"
+    })
+    .addFields({
+      name: "👑 ADMIN/OWNER BOT",
+      value:
+        "🔹 `wew addxu <tên người> <số xu>`: thêm xu cho người khác\n" +
+        "🔹 `wew thuxu <tên người> <số xu>`: thu xu từ người khác\n"+
+        "🔹 `wew checkxu @user`: kiểm tra số xu của người khác\n" +
+        "🔹 `wew addadmin <id>`: thêm admin\n" +
+        "🔹 `wew unadmin <id>`: xóa admin\n" +
+        "🔹 `wew recode <tên code>`: xóa code\n" +
+        "🔹 `wew logs`: xem log\n" +
+        "🔹 `wew mayman @user <tăng % may mắn>`: tăng số may mắn lên \n" +
+        "🔹 `wew unmayman @user`: reset số phần trăm may mắn\n" +
+        "🔹 `/goptu <từ>`: góp thêm từ mới vào từ điển nối từ\n" +
+        "🔹 `wew addcode <tên code> <xu> <số lần>`: thêm code mới"
+    })
+    .addFields({
+      name: "🛠️ OWNER SERVER",
+      value:
+        "🔹 `/setnoituchannel <channel>`: set channel chơi nối từ mặc định\n" +
+        "🔹 `/setlogschannel <channel>`: set channel log"
+    })
+    .setFooter({ text: "WEW BOT ● MADE BY CAUBEVOTRI" });
+
+  return interaction.reply({ embeds: [embed] });
+}
 
     if (interaction.commandName === "danhbai") {
       const loaiBai = interaction.options.getString("loai_bai");
@@ -1149,35 +1216,33 @@ if (id?.startsWith("tx_") || (interaction.isModalSubmit() && id?.startsWith("tx_
       });
     }
 
-    // Xử lý khi người dùng bấm nút (Mở Modal)
-    if (interaction.isButton()) {
-      const parts = customId.split("_");
-      let betType;
-      if (parts[1] === "num") {
-        betType = `num_${parts[2]}`;
-      } else {
-        betType = parts[1];
-      }
-      const modal = new ModalBuilder()
-        .setCustomId(`tx_bet_${betType}_${gameId}`)
-        .setTitle(`Nhập xu cược (${betType.toUpperCase()})`);
-
-      const input = new TextInputBuilder()
-        .setCustomId("amount")
-        .setLabel("Số xu (tối đa 1.000.000 <:ShinCoin:1522156112055635968>)")
-        .setStyle(TextInputStyle.Short)
-        .setRequired(true);
-
-      modal.addComponents(new ActionRowBuilder().addComponents(input));
-      
-      try {
-        await interaction.showModal(modal);
-      } catch (err) {
-        console.error("Lỗi showModal Tài Xỉu:", err);
-        await interaction.reply({ content: "❌ Không thể hiện cửa sổ nhập cược. Vui lòng thử lại.", ephemeral: true });
-      }
-      return;
+  if (interaction.isButton()) {
+    const parts = customId.split("_");
+    let betType;
+    if (parts[1] === "num") {
+      betType = `num_${parts[2]}`;
+    } else {
+      betType = parts[1];
     }
+    const modal = new ModalBuilder()
+      .setCustomId(`tx_bet_${betType}_${gameId}`)
+      .setTitle(`Nhập xu cược (${betType.toUpperCase()})`);
+
+    const input = new TextInputBuilder()
+      .setCustomId("amount")
+      .setLabel("Số xu cược (max 1M)")   // <--- ĐÃ SỬA
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true);
+
+    modal.addComponents(new ActionRowBuilder().addComponents(input));
+    try {
+      await interaction.showModal(modal);
+    } catch (err) {
+      console.error("Lỗi showModal Tài Xỉu:", err);
+      await interaction.reply({ content: "❌ Không thể hiện cửa sổ nhập cược. Vui lòng thử lại.", ephemeral: true });
+    }
+    return;
+  }
 }
 
 async function startTaiXiuCountdown(channel, gameId, channelId) {
@@ -2018,70 +2083,6 @@ if (cmd === "stop" || cmd === "chiu") {
     wordGameState.lastUserId = "";
 
     return message.reply(`👑 **BOT ĐÃ GIÀNH CHIẾN THẮNG TUYỆT ĐỐI!**\nTất cả người chơi đều thất bại và không có bất kỳ phần thưởng nào được trao!`);
-  }
-
-// MENU
-  if (cmd === "menu") {
-    const embed = new EmbedBuilder()
-      .setColor("#f5d400")
-      .setTitle("🏛️ Các lệnh của WEW")
-      .setDescription("Danh sách các lệnh của bot")
-      .addFields({
-        name: "💰 Lệnh bình thường (Trang 1)",
-        value:
-          "🔹 `wew daily`: nhận phần thưởng mỗi ngày\n" +
-          "🔹 `wew xu`: xem số xu có trong ví\n" +
-          "🔹 `wew cf <số xu/all>`: cược xu 50/50\n" +
-          "🔹 `wew givexu @user <số xu>`: tặng xu cho người khác\n" +
-          "🔹 `wew gt <tên ngân hàng> <số xu>`: gửi xu vào ngân hàng\n" +
-          "🔹 `wew rt <tên ngân hàng> <số xu>`: rút xu từ ngân hàng\n" +
-          "🔹 `wew checknh`: kiểm tra số dư các ngân hàng\n" +
-          "🔹 `wew vayxu @user <số xu>`: yêu cầu vay xu từ người khác\n" +
-          "🔹 `wew trano @user`: trả nợ cho người vay\n" +
-          "🔹 `wew checkno`: kiểm tra các khoản nợ của bạn\n" +
-          "🔹 `wew nhapcode <tên code>`: nhập code để nhận xu",
-      })
-      .addFields({
-        name: "💰 Lệnh bình thường (Trang 2)",
-        value:
-          "🔹 `wew topdaigia`: xem bảng xếp hạng đại gia trong server\n" +
-          "🔹 `wew adminlist`: xem danh sách admin/owner\n" +
-          "🔹 `wew muaveso`: mua vé số\n" +
-          "🔹 `wew quaymayman`: quay vòng quay may mắn\n" +
-          "🔹 `wew keobuabao`: chơi kéo búa bao với mọi người trong channel\n" +
-          "🔹 `wew start`: Bắt đầu chơi game nối từ (người vs bot)\n" +
-          "🔹 `wew stop`: Dừng chơi game nối từ hiện tại\n" +
-          "🔹 `wew chiu`: đầu hàng game nối từ\n" +
-          "🔹 `wew sanduangua <số ngựa> <số xu>`: chơi sàn đua ngựa\n" +
-          "🔹 `wew baucua <lựa chọn> <số xu>`: chơi bầu cua\n" +
-          "🔹 `/lixi (soxu) (soluong) (thoigian)`: lì xì xu cho anh em\n" +
-          "🔹 `/taixiu`: chơi tài xỉu\n" +
-          "🔹 `wew maydanhbac`: chơi máy đánh bạc",
-      })
-      .addFields({
-        name: "👑 ADMIN/OWNER BOT",
-        value:
-          "🔹 `wew addxu <tên người> <số xu>`: thêm xu cho người khác\n" +
-          "🔹 `wew thuxu <tên người> <số xu>`: thu xu từ người khác\n"+
-          "🔹 `wew checkxu @user`: kiểm tra số xu của người khác\n" +
-          "🔹 `wew addadmin <id>`: thêm admin\n" +
-          "🔹 `wew unadmin <id>`: xóa admin\n" +
-          "🔹 `wew recode <tên code>`: xóa code\n" +
-          "🔹 `wew logs`: xem log\n" +
-          "🔹 `wew mayman @user <tăng % may mắn>`: tăng số may mắn lên \n" +
-          "🔹 `wew unmayman @user`: reset số phần trăm may mắn\n" +
-          "🔹 `/goptu <từ>`: góp thêm từ mới vào từ điển nối từ\n" +
-          "🔹 `wew addcode <tên code> <xu> <số lần>`: thêm code mới\n",
-      })
-      .addFields({
-        name: "🛠️ OWNER SERVER",
-        value:
-          "🔹 `/setnoituchannel <channel>`: set channel chơi nối từ mặc định\n" +
-          "🔹 `/setlogschannel <channel>`: set channel log\n",
-      })
-      .setFooter({ text: "WEW BOT ● MADE BY CAUBEVOTRI" });
-
-    return message.reply({ embeds: [embed] }).catch(console.error);
   }
 
   // LỆNH QUAY
