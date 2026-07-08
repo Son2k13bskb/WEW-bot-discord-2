@@ -33,7 +33,6 @@ let threadCounter = 1;
 // Bộ bài chuẩn 52 lá
 const suits = ['♠', '♣', '♦', '♥']; // Bích, Tép, Rô, Cơ
 const ranks = ['3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A', '2'];
-const cardTurnTimers = new Map();
 const codes = new Map(); 
 const usedCodes = new Map(); 
 const debts = new Map();
@@ -414,6 +413,19 @@ async function handlePlayerPass(client, lobbyId, userId, isTimeout) {
             break;
         }
     }
+
+      // Kiểm tra có ai hết bài không
+  for (const p of game.players) {
+    if (p.hand.length === 0) {
+      // Người chơi này đã thắng
+      if (cardTurnTimers.has(lobbyId)) clearTimeout(cardTurnTimers.get(lobbyId));
+      activeCardGames.delete(lobbyId);
+      activeLobbies.delete(lobbyId);
+      const thread = client.channels.cache.get(activeLobbies.get(lobbyId)?.threadId);
+      if (thread) thread.send(`🏆 **${p.name}** đã hết bài và giành chiến thắng!`);
+      return;
+    }
+  }
     
     if (typeof updateGameUI === "function") {
         updateGameUI(client, lobbyId, `**${userId}** đã bỏ qua lượt.`);
@@ -740,7 +752,7 @@ if (interaction.isChatInputCommand() && interaction.commandName === "taixiu") {
   const gameId = Date.now().toString();
 
   const embed = new EmbedBuilder()
-    .setTitle("🎲 Tài Xỉu WEW - Nhà cái Châu Chấu! 🔥")
+    .setTitle("🎲 Tài Xỉu WEW - Nhà cái đến từ Châu Chấu! 🔥")
     .setDescription("Chọn loại cược 👇\nSau đó nhập số xu (tối đa **1.000.000 <:ShinCoin:1522156112055635968>**)")
     .setColor("#ffc800");
 
@@ -1149,9 +1161,6 @@ if (id?.startsWith("db_showhand_")) {
       }
 
       // Nếu hợp lệ -> Thực thi gỡ lá bài ra khỏi tay và đặt lên sàn đấu
-      playerHand.splice(cardIdx, 1);
-
-      // Thực thi gỡ lá bài ra khỏi tay và đặt lên sàn đấu
       playerHand.splice(cardIdx, 1);
       const playedCardText = `${rank}${suit}`;
       game.tableCards = playedCardText;
@@ -3378,6 +3387,13 @@ function startDanhBaiGame(client, lobbyId) {
   const lobby = activeLobbies.get(lobbyId);
   if (!lobby) return;
 
+  const thread = client.channels.cache.get(lobby.threadId);
+  if (!thread) {
+    console.error(`Thread không tồn tại cho lobby ${lobbyId}, hủy ván.`);
+    activeLobbies.delete(lobbyId);
+    return;
+  }
+
   // Hủy ngay bộ đếm thời gian chờ 5 phút ban đầu để tránh bị lặp trận hoặc kéo dài ván
   if (lobby.timerRef) clearTimeout(lobby.timerRef);
 
@@ -3406,6 +3422,10 @@ async function updateGameUI(client, lobbyId, systemNotice = "") {
   if (!game || !lobby) return;
 
   const thread = client.channels.cache.get(lobby.threadId);
+  if (!thread) {
+    console.error(`Không tìm thấy thread cho lobby ${lobbyId}`);
+    return;
+  }
   if (!thread) return;
 
   const currentActivePlayer = game.players[game.currentTurn];
@@ -3436,8 +3456,90 @@ async function updateGameUI(client, lobbyId, systemNotice = "") {
   const turnTimer = setTimeout(() => {
     handlePlayerPass(client, lobbyId, currentActivePlayer.id, true);
   }, 30 * 1000);
+
+    // Sau khi hiển thị UI, nếu lượt hiện tại là bot thì bot tự động chơi
+  const current = game.players[game.currentTurn];
+  if (current.isBot) {
+    // Hủy timer vì bot sẽ xử lý ngay
+    if (cardTurnTimers.has(lobbyId)) clearTimeout(cardTurnTimers.get(lobbyId));
+    // Gọi bot sau 1 giây để UI kịp hiển thị
+    setTimeout(() => botPlayTurn(client, lobbyId), 1000);
+  }
   
   cardTurnTimers.set(lobbyId, turnTimer);
+}
+
+async function botPlayTurn(client, lobbyId) {
+  const game = activeCardGames.get(lobbyId);
+  if (!game) return;
+  const currentPlayer = game.players[game.currentTurn];
+  if (!currentPlayer.isBot) return;
+
+  // Bot đánh lá thấp nhất có thể (theo thứ tự rank)
+  // Nếu không có bài hợp lệ thì bỏ lượt
+  const hand = currentPlayer.hand;
+  if (hand.length === 0) {
+    // Bot thắng luôn nếu hết bài (nhưng thực tế không nên)
+    activeCardGames.delete(lobbyId);
+    activeLobbies.delete(lobbyId);
+    return;
+  }
+
+  // Tìm lá nhỏ nhất có thể đánh được (so với tableCards)
+  let cardToPlay = null;
+  for (const card of hand) {
+    if (!game.tableCards) {
+      cardToPlay = card;
+      break;
+    }
+    const tableRank = game.tableCards.slice(0, -1);
+    const tableSuit = game.tableCards.slice(-1);
+    if (isCardHigher(card.rank, card.suit, tableRank, tableSuit, game.mode)) {
+      cardToPlay = card;
+      break;
+    }
+  }
+
+  if (!cardToPlay) {
+    // Không có bài chặn được -> bỏ lượt
+    game.passedPlayers.add(currentPlayer.id);
+    // chuyển lượt tiếp theo
+    let nextTurn = game.currentTurn;
+    for (let i = 0; i < game.players.length; i++) {
+      nextTurn = (nextTurn + 1) % game.players.length;
+      if (!game.passedPlayers.has(game.players[nextTurn].id)) {
+        game.currentTurn = nextTurn;
+        break;
+      }
+    }
+    updateGameUI(client, lobbyId, `🤖 Bot ${currentPlayer.name} bỏ lượt.`);
+    return;
+  }
+
+  // Đánh lá bài
+  const idx = hand.findIndex(c => c.rank === cardToPlay.rank && c.suit === cardToPlay.suit);
+  hand.splice(idx, 1);
+  game.tableCards = `${cardToPlay.rank}${cardToPlay.suit}`;
+  game.lastPlayedBy = currentPlayer.id;
+
+  if (hand.length === 0) {
+    const thread = client.channels.cache.get(lobby.threadId); // lấy trước
+    if (thread) thread.send(`🤖 Bot ${currentPlayer.name} đã hết bài và chiến thắng!`);
+    activeCardGames.delete(lobbyId);
+    activeLobbies.delete(lobbyId);
+    return;
+  }
+
+  // Chuyển lượt sang người tiếp theo
+  let nextTurn = game.currentTurn;
+  for (let i = 0; i < game.players.length; i++) {
+    nextTurn = (nextTurn + 1) % game.players.length;
+    if (!game.passedPlayers.has(game.players[nextTurn].id)) {
+      game.currentTurn = nextTurn;
+      break;
+    }
+  }
+  updateGameUI(client, lobbyId, `🤖 Bot ${currentPlayer.name} đã đánh: ${cardToPlay.rank}${cardToPlay.suit}`);
 }
 
 // Hàm giải quyết logic Bỏ Qua lượt (Ấn nút hoặc Hết giờ)
@@ -3600,11 +3702,9 @@ async function resultStr(channel, channelId) {
 }
 
 client.on("threadMembersUpdate", async (oldMembers, newMembers) => {
-    // Kiểm tra xem thread này có thuộc về sảnh bài nào không
     const matchedLobby = [...activeLobbies.values()].find(l => l.threadId === newMembers.thread.id);
     if (matchedLobby) {
         const threadMembers = await newMembers.thread.members.fetch();
-        // Trừ tài khoản Bot ra, nếu không còn ai thực tế tương tác
         const humanMembers = threadMembers.filter(m => m.id !== client.user.id);
         if (humanMembers.size === 0) {
              if (cardTurnTimers.has(matchedLobby.id)) clearTimeout(cardTurnTimers.get(matchedLobby.id));
