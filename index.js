@@ -2550,30 +2550,46 @@ if (cmd === "muaveso") {
 
 // Lệnh adminlist
 if (cmd === "adminlist") {
-  let list = [];
-
-  for (let id of allowedIDs) {
+  // Lấy danh sách Owner (từ allowedIDs)
+  let ownerList = [];
+  for (const id of allowedIDs) {
     try {
-      let user = await client.users.fetch(id);
-      list.push(`👑 OWNER: ${user.tag}`);
+      const user = await client.users.fetch(id);
+      ownerList.push(`<@${id}> (${user.globalName || user.username})`);
     } catch {
-      list.push(`👑 OWNER: ${id}`);
+      ownerList.push(`<@${id}>`);
     }
   }
 
-  for (let id of admins) {
+  // Lấy danh sách Admin (từ Set admins)
+  let adminList = [];
+  for (const id of admins) {
     try {
-      let user = await client.users.fetch(id);
-      list.push(`🛡️ ADMIN: ${user.tag}`);
+      const user = await client.users.fetch(id);
+      adminList.push(`<@${id}> (${user.globalName || user.username})`);
     } catch {
-      list.push(`🛡️ ADMIN: ${id}`);
+      adminList.push(`<@${id}>`);
     }
   }
 
   const embed = new EmbedBuilder()
-    .setColor("Gold")
-    .setTitle("👑 Danh sách quyền lực")
-    .setDescription(list.join("\n") || "Không có ai 🤡");
+    .setColor("#f5d400") // Vàng gold
+    .setTitle("🏛️ Admin/Owner Bot")
+    .setDescription("Danh sách Owner và Admin hiện tại của Bot.")
+    .addFields(
+      {
+        name: "👑 Owner",
+        value: ownerList.length ? ownerList.join("\n") : "Không có",
+        inline: false
+      },
+      {
+        name: "🛡️ Admins",
+        value: adminList.length ? adminList.join("\n") : "Chưa có admin nào",
+        inline: false
+      }
+    )
+    .setFooter({ Text: "WEW BOT ● MADE BY CAUBEVOTRI" })
+    .setTimestamp();
 
   return message.reply({ embeds: [embed] });
 }
