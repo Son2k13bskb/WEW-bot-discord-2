@@ -997,50 +997,64 @@ if (interaction.isChatInputCommand() && interaction.commandName === "taixiu") {
     return;
   }
 
-if (id?.startsWith("db_leave_")) {
+  if (id?.startsWith("db_leave_")) {
+    // Defer ngay lập tức để tránh timeout
+    await interaction.deferReply({ ephemeral: true });
+
     const lobbyId = id.split("_")[2];
     const lobby = activeLobbies.get(lobbyId);
-    if (!lobby) return interaction.reply({ content: "❌ Sảnh này không còn tồn tại!", ephemeral: true });
+    if (!lobby) {
+        return interaction.editReply({ content: "❌ Sảnh này không còn tồn tại!" });
+    }
 
     const playerIndex = lobby.players.findIndex(p => p.id === interaction.user.id);
-    if (playerIndex === -1) return interaction.reply({ content: "❌ Bạn chưa tham gia sảnh này!", ephemeral: true });
+    if (playerIndex === -1) {
+        return interaction.editReply({ content: "❌ Bạn chưa tham gia sảnh này!" });
+    }
 
-    // Hoàn trả lại tiền cược nếu có chế độ ăn tiền
+    // Hoàn trả tiền cược nếu có
     if (lobby.cheDo === "tien") {
-      let userCash = money.get(interaction.user.id) || 0;
-      money.set(interaction.user.id, userCash + lobby.players[playerIndex].bet);
-      saveData();
+        let userCash = money.get(interaction.user.id) || 0;
+        money.set(interaction.user.id, userCash + lobby.players[playerIndex].bet);
+        saveData();
     }
 
     lobby.players.splice(playerIndex, 1);
-    
-    // Thực hiện trục xuất member ra khỏi Thread Discord
+
+    // Xoá khỏi Thread (nếu có)
     const thread = client.channels.cache.get(lobby.threadId);
     if (thread) await thread.members.remove(interaction.user.id).catch(()=>{});
-    
-    // [BỔ SUNG QUAN TRỌNG]: Nếu sảnh không còn bất kỳ ai, tự động xóa Thread phòng để tránh rác server
+
+    // Nếu sảnh trống, dọn dẹp và kết thúc
     if (lobby.players.length === 0) {
         if (cardTurnTimers.has(lobbyId)) clearTimeout(cardTurnTimers.get(lobbyId));
         if (thread) await thread.delete("Không còn ai trong phòng chơi bài, tự động giải tán.").catch(()=>{});
         activeLobbies.delete(lobbyId);
         activeCardGames.delete(lobbyId);
-        return interaction.reply({ content: "✅ Mọi người đã rời phòng, hệ thống tự động xóa sảnh và dọn dẹp Thread thành công!", ephemeral: true });
+        return interaction.editReply({ content: "✅ Mọi người đã rời phòng, hệ thống tự động xóa sảnh và dọn dẹp Thread thành công!" });
     }
 
-    // Nếu trận đang diễn ra mà có người chạy trốn, thay thế vị trí bằng AI ẩn danh
+    // Nếu trận đang diễn ra, thay người chơi bằng bot
     const game = activeCardGames.get(lobbyId);
     if (game) {
-        game.players[playerIndex] = { id: `AI_${Date.now()}`, name: `Bot Ẩn Danh`, isBot: true, hand: game.players[playerIndex].hand };
+        game.players[playerIndex] = {
+            id: `AI_${Date.now()}`,
+            name: `Bot Ẩn Danh`,
+            isBot: true,
+            hand: game.players[playerIndex].hand
+        };
+        // Cập nhật UI (không cần await để không làm chậm)
         updateGameUI(client, lobbyId, `👤 Người chơi **${interaction.user.username}** đã bỏ trốn, Bot tự động thế chỗ.`);
     } else {
         updateLobbyUI(client, lobby);
     }
-    return interaction.reply({ content: "✅ Đã rời khỏi phòng chơi thành công.", ephemeral: true });
+
+    return interaction.editReply({ content: "✅ Đã rời khỏi phòng chơi thành công." });
   }
 
   // Logic Toggle Ephemeral Card Hand
 // Logic hiển thị danh sách nút bài kèm gợi ý thông minh thông qua Ephemeral Message
-if (id?.startsWith("db_showhand_")) {
+  if (id?.startsWith("db_showhand_")) {
       const lobbyId = id.split("_")[2];
       const game = activeCardGames.get(lobbyId);
       if (!game) return interaction.reply({ content: "❌ Ván bài đã kết thúc!", ephemeral: true });
