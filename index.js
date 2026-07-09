@@ -131,6 +131,15 @@ const { REST, Routes, SlashCommandBuilder } = require("discord.js");
 
 const slashCommands = [
     new SlashCommandBuilder()
+    .setName("reset")
+    .setDescription("Reset số xu của người chơi về 10000 (Admin)")
+    .addUserOption(option =>
+      option.setName("nguoi")
+        .setDescription("Người chơi cần reset")
+        .setRequired(true)
+    )
+    .toJSON(),
+    new SlashCommandBuilder()
     .setName("topdaigiaserver")
     .setDescription("Xem bảng xếp hạng đại gia trong server")
     .toJSON(),
@@ -471,6 +480,24 @@ client.on("interactionCreate", async (interaction) => {
   
   if (interaction.isChatInputCommand()) {
 
+    if (interaction.commandName === "reset") {
+  // Chỉ Admin/Owner
+  if (!isAdmin(interaction.user.id)) {
+    return interaction.reply({ content: "❌ Bạn không có quyền sử dụng lệnh này!", ephemeral: true });
+  }
+  const target = interaction.options.getUser("nguoi");
+  if (!target) {
+    return interaction.reply({ content: "❌ Không tìm thấy người dùng!", ephemeral: true });
+  }
+  // Reset ví về 10000
+  money.set(target.id, 10000);
+  saveData();
+  return interaction.reply({
+    content: `✅ Đã reset số xu của ${target.username} về **${formatMoney(10000)}**`,
+    ephemeral: true
+  });
+}
+
 if (interaction.commandName === "topdaigiaserver" || interaction.commandName === "topdaigiaglobal") {
   // Defer ngay lập tức
   await interaction.deferReply();
@@ -537,14 +564,15 @@ if (interaction.commandName === "topdaigiaserver" || interaction.commandName ===
         "🔹 `wew addxu <tên người> <số xu>`: thêm xu cho người khác\n" +
         "🔹 `wew thuxu <tên người> <số xu>`: thu xu từ người khác\n"+
         "🔹 `wew checkxu @user`: kiểm tra số xu của người khác\n" +
-        "🔹 `wew addadmin <id>`: thêm admin\n" +
-        "🔹 `wew unadmin <id>`: xóa admin\n" +
+        "🔹 `wew addadmin <id>`: thêm admin (Only Owner)\n" +
+        "🔹 `wew unadmin <id>`: xóa admin (Only Owner)\n" +
         "🔹 `wew recode <tên code>`: xóa code\n" +
         "🔹 `wew logs`: xem log\n" +
         "🔹 `wew mayman @user <tăng % may mắn>`: tăng số may mắn lên \n" +
         "🔹 `wew unmayman @user`: reset số phần trăm may mắn\n" +
         "🔹 `/goptu <từ>`: góp thêm từ mới vào từ điển nối từ\n" +
-        "🔹 `wew addcode <tên code> <xu> <số lần>`: thêm code mới"
+        "🔹 `wew addcode <tên code> <xu> <số lần>`: thêm code mới\n" +
+        "🔹 `/reset <người>`: reset số xu của người chơi về 10000"
     })
     .addFields({
       name: "🛠️ OWNER SERVER",
