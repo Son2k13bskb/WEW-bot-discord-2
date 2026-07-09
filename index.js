@@ -801,15 +801,21 @@ if (interaction.commandName === "topdaigiaserver" || interaction.commandName ===
     }
 
 if (interaction.isStringSelectMenu() && interaction.customId?.startsWith("top_switch_")) {
+  let deferred = false;
   try {
-    // Defer ngay trong try để bắt lỗi nếu có
     await interaction.deferUpdate();
+    deferred = true;
+  } catch (err) {
+    console.error("Lỗi deferUpdate:", err);
+    return interaction.reply({ content: "❌ Không thể xử lý yêu cầu. Vui lòng thử lại.", ephemeral: true });
+  }
 
+  try {
     const userId = interaction.customId.split("_")[2];
     if (interaction.user.id !== userId) {
       return interaction.editReply({ content: "❌ Bạn không thể thay đổi bảng xếp hạng của người khác!", components: [] });
     }
-    const type = interaction.values[0]; // "server" hoặc "global"
+    const type = interaction.values[0];
 
     const embedData = await buildTopEmbed(interaction.client, interaction.guild, interaction.user.id, type);
 
@@ -827,9 +833,14 @@ if (interaction.isStringSelectMenu() && interaction.customId?.startsWith("top_sw
   } catch (error) {
     console.error("Lỗi select menu top:", error);
     try {
-      await interaction.editReply({ content: "❌ Đã xảy ra lỗi khi chuyển đổi bảng xếp hạng. Vui lòng thử lại.", components: [] });
+      if (deferred) {
+        await interaction.editReply({ content: "❌ Đã xảy ra lỗi khi chuyển đổi bảng xếp hạng. Vui lòng thử lại.", components: [] });
+      } else {
+        await interaction.reply({ content: "❌ Đã xảy ra lỗi.", ephemeral: true });
+      }
     } catch (err) {
-      await interaction.followUp({ content: "❌ Đã xảy ra lỗi. Vui lòng thử lại.", ephemeral: true });
+      // fallback: thử followUp nếu có thể
+      try { await interaction.followUp({ content: "❌ Lỗi không xác định. Vui lòng thử lại.", ephemeral: true }); } catch (_) {}
     }
   }
 }
@@ -3638,7 +3649,6 @@ async function buildTopEmbed(client, guild, userId, type) {
   const isServer = type === "server";
   const title = isServer ? "🏆 TOP ĐẠI GIA SERVER" : "🏆 TOP ĐẠI GIA TOÀN CẦU";
 
-  // Trường hợp dùng lệnh server nhưng không có guild (DM)
   if (isServer && !guild) {
     const embed = new EmbedBuilder()
       .setColor("#ff4444")
@@ -3650,16 +3660,16 @@ async function buildTopEmbed(client, guild, userId, type) {
 
   let userList = [];
   try {
-if (isServer && guild) {
-  // Dùng cache để tránh fetch chậm
-  const members = guild.members.cache;
-  for (const [id, member] of members) {
-    const cash = money.get(id) || 0;
-    if (cash > 0) {
-      userList.push({ id, username: member.displayName, cash });
-    }
-  }
-} else {
+    if (isServer && guild) {
+      // Fetch toàn bộ member để có dữ liệu đầy đủ
+      const members = await guild.members.fetch({ force: true });
+      for (const [id, member] of members) {
+        const cash = money.get(id) || 0;
+        if (cash > 0) {
+          userList.push({ id, username: member.displayName, cash });
+        }
+      }
+    } else {
       // Global: từ Map money
       for (const [id, cash] of money.entries()) {
         if (cash > 0) {
@@ -3682,7 +3692,6 @@ if (isServer && guild) {
     return { embed };
   }
 
-  // Sắp xếp
   userList.sort((a, b) => b.cash - a.cash);
 
   const userRank = userList.findIndex(u => u.id === userId) + 1;
@@ -3690,23 +3699,19 @@ if (isServer && guild) {
   const top = userList.slice(0, 10);
   const totalPlayers = userList.length;
 
-  // Embed
   const embed = new EmbedBuilder()
     .setColor("#f5d400")
     .setTitle(title)
     .setThumbnail(isServer ? guild?.iconURL({ dynamic: true, size: 512 }) : client.user.displayAvatarURL({ dynamic: true, size: 512 }))
     .setDescription(`**Guild:** ${isServer ? (guild ? guild.name : "Không xác định") : "Toàn cầu"}`);
 
-  // Phần "Your Current Stats"
   let stats = `**User:** <@${userId}>\n`;
   stats += `**Rank:** #${userRank > 0 ? userRank : "Chưa có"} (${userList.length > 0 ? ((userRank / userList.length) * 100).toFixed(1) : 0}%)\n`;
   stats += `**Số xu:** ${formatMoney(userCash)}`;
   embed.addFields({ name: "📊 Your Current Stats", value: stats, inline: false });
 
-  // Đường phân cách (giống OWO)
   embed.addFields({ name: "\u200b", value: "---------------", inline: false });
 
-  // Phần "Rankings"
   let rankList = "";
   if (top.length === 0) {
     rankList = "Chưa có dữ liệu";
@@ -3718,7 +3723,6 @@ if (isServer && guild) {
   }
   embed.addFields({ name: "📋 Rankings", value: rankList, inline: false });
 
-  // Footer
   const now = new Date();
   const timeStr = now.toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
   embed.setFooter({ text: `Last updated: ${timeStr} · Total players: ${totalPlayers}` });
