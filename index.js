@@ -2555,7 +2555,7 @@ if (cmd === "adminlist") {
   for (const id of allowedIDs) {
     try {
       const user = await client.users.fetch(id);
-      ownerList.push(`<@${id}> (${user.globalName || user.username})`);
+      ownerList.push(`<@${id}>`);
     } catch {
       ownerList.push(`<@${id}>`);
     }
@@ -2566,7 +2566,7 @@ if (cmd === "adminlist") {
   for (const id of admins) {
     try {
       const user = await client.users.fetch(id);
-      adminList.push(`<@${id}> (${user.globalName || user.username})`);
+      adminList.push(`<@${id}>`);
     } catch {
       adminList.push(`<@${id}>`);
     }
