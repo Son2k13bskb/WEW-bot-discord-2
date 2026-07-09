@@ -772,14 +772,20 @@ if (interaction.commandName === "topdaigiaserver" || interaction.commandName ===
     }
 
 if (interaction.isStringSelectMenu() && interaction.customId?.startsWith("top_switch_")) {
-  const userId = interaction.customId.split("_")[2];
-  if (interaction.user.id !== userId) {
-    return interaction.reply({ content: "❌ Bạn không thể thay đổi bảng xếp hạng của người khác!", ephemeral: true });
-  }
-  const type = interaction.values[0];
-  await interaction.deferUpdate();
   try {
+    const userId = interaction.customId.split("_")[2];
+    if (interaction.user.id !== userId) {
+      return interaction.reply({ content: "❌ Bạn không thể thay đổi bảng xếp hạng của người khác!", ephemeral: true });
+    }
+    const type = interaction.values[0]; // "server" hoặc "global"
+    
+    // Defer update ngay lập tức để tránh timeout
+    await interaction.deferUpdate();
+    
+    // Lấy dữ liệu embed
     const embedData = await buildTopEmbed(interaction.client, interaction.guild, interaction.user.id, type);
+    
+    // Tạo lại row select menu
     const row = new ActionRowBuilder().addComponents(
       new StringSelectMenuBuilder()
         .setCustomId(`top_switch_${interaction.user.id}`)
@@ -789,10 +795,18 @@ if (interaction.isStringSelectMenu() && interaction.customId?.startsWith("top_sw
           { label: "Global", value: "global", default: type === "global" }
         ])
     );
+    
+    // Cập nhật tin nhắn
     await interaction.editReply({ embeds: [embedData.embed], components: [row] });
-  } catch (err) {
-    console.error(err);
-    await interaction.editReply({ content: "❌ Lỗi khi chuyển đổi bảng xếp hạng." });
+  } catch (error) {
+    console.error("Lỗi select menu top:", error);
+    try {
+      // Thử editReply nếu có thể
+      await interaction.editReply({ content: "❌ Đã xảy ra lỗi khi chuyển đổi bảng xếp hạng. Vui lòng thử lại." });
+    } catch (err) {
+      // Nếu editReply fail, dùng reply ephemeral
+      await interaction.reply({ content: "❌ Đã xảy ra lỗi khi chuyển đổi bảng xếp hạng. Vui lòng thử lại.", ephemeral: true });
+    }
   }
 }
 
