@@ -2588,7 +2588,7 @@ if (cmd === "adminlist") {
         inline: false
       }
     )
-    .setFooter({ Text: "WEW BOT ● MADE BY CAUBEVOTRI" })
+    .setFooter({ text: "WEW BOT ● MADE BY CAUBEVOTRI" })
     .setTimestamp();
 
   return message.reply({ embeds: [embed] });
