@@ -494,7 +494,6 @@ client.on("interactionCreate", async (interaction) => {
   saveData();
   return interaction.reply({
     content: `✅ Đã reset số xu của ${target.username} về **${formatMoney(10000)}**`,
-    ephemeral: true
   });
 }
 
