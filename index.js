@@ -2573,9 +2573,10 @@ if (cmd === "adminlist") {
   }
 
   const embed = new EmbedBuilder()
-    .setColor("#f5d400") // Vàng gold
-    .setTitle("🏛️ Admin/Owner Bot")
+    .setColor("#f5d400") // Vàng gold – bạn có thể đổi màu theo ý
+    .setTitle("🏛️ BAN QUẢN TRỊ BOT")
     .setDescription("Danh sách Owner và Admin hiện tại của Bot.")
+    .setThumbnail(client.user.displayAvatarURL({ dynamic: true, size: 512 })) // <--- THÊM DÒNG NÀY
     .addFields(
       {
         name: "👑 Owner",
