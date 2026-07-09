@@ -3628,16 +3628,16 @@ async function buildTopEmbed(client, guild, userId, type) {
 
   let userList = [];
   try {
-    if (isServer && guild) {
-      // Lấy toàn bộ member trong server (bắt buộc để có danh sách đầy đủ)
-      const members = await guild.members.fetch({ force: true });
-      for (const [id, member] of members) {
-        const cash = money.get(id) || 0;
-        if (cash > 0) {
-          userList.push({ id, username: member.displayName, cash });
-        }
-      }
-    } else {
+if (isServer && guild) {
+  // Dùng cache để tránh fetch chậm
+  const members = guild.members.cache;
+  for (const [id, member] of members) {
+    const cash = money.get(id) || 0;
+    if (cash > 0) {
+      userList.push({ id, username: member.displayName, cash });
+    }
+  }
+} else {
       // Global: từ Map money
       for (const [id, cash] of money.entries()) {
         if (cash > 0) {
