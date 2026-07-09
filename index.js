@@ -472,9 +472,11 @@ client.on("interactionCreate", async (interaction) => {
   if (interaction.isChatInputCommand()) {
 
 if (interaction.commandName === "topdaigiaserver" || interaction.commandName === "topdaigiaglobal") {
-  const type = interaction.commandName === "topdaigiaserver" ? "server" : "global";
+  // Defer ngay lập tức
   await interaction.deferReply();
+
   try {
+    const type = interaction.commandName === "topdaigiaserver" ? "server" : "global";
     const embedData = await buildTopEmbed(interaction.client, interaction.guild, interaction.user.id, type);
     const row = new ActionRowBuilder().addComponents(
       new StringSelectMenuBuilder()
@@ -486,8 +488,8 @@ if (interaction.commandName === "topdaigiaserver" || interaction.commandName ===
         ])
     );
     await interaction.editReply({ embeds: [embedData.embed], components: [row] });
-  } catch (err) {
-    console.error(err);
+  } catch (error) {
+    console.error("Lỗi slash top:", error);
     await interaction.editReply({ content: "❌ Lỗi khi tải bảng xếp hạng. Vui lòng thử lại." });
   }
 }
@@ -772,19 +774,20 @@ if (interaction.commandName === "topdaigiaserver" || interaction.commandName ===
     }
 
 if (interaction.isStringSelectMenu() && interaction.customId?.startsWith("top_switch_")) {
+  // Defer ngay lập tức – KHÔNG AWAIT gì trước đó
+  await interaction.deferUpdate();
+
   try {
     const userId = interaction.customId.split("_")[2];
     if (interaction.user.id !== userId) {
-      return interaction.reply({ content: "❌ Bạn không thể thay đổi bảng xếp hạng của người khác!", ephemeral: true });
+      // Vì đã defer, dùng editReply để gửi phản hồi lỗi
+      return interaction.editReply({ content: "❌ Bạn không thể thay đổi bảng xếp hạng của người khác!", components: [] });
     }
     const type = interaction.values[0]; // "server" hoặc "global"
-    
-    // Defer update ngay lập tức để tránh timeout
-    await interaction.deferUpdate();
-    
-    // Lấy dữ liệu embed
+
+    // Lấy dữ liệu embed (có thể mất thời gian)
     const embedData = await buildTopEmbed(interaction.client, interaction.guild, interaction.user.id, type);
-    
+
     // Tạo lại row select menu
     const row = new ActionRowBuilder().addComponents(
       new StringSelectMenuBuilder()
@@ -795,17 +798,16 @@ if (interaction.isStringSelectMenu() && interaction.customId?.startsWith("top_sw
           { label: "Global", value: "global", default: type === "global" }
         ])
     );
-    
+
     // Cập nhật tin nhắn
     await interaction.editReply({ embeds: [embedData.embed], components: [row] });
   } catch (error) {
     console.error("Lỗi select menu top:", error);
     try {
-      // Thử editReply nếu có thể
-      await interaction.editReply({ content: "❌ Đã xảy ra lỗi khi chuyển đổi bảng xếp hạng. Vui lòng thử lại." });
+      await interaction.editReply({ content: "❌ Đã xảy ra lỗi khi chuyển đổi bảng xếp hạng. Vui lòng thử lại.", components: [] });
     } catch (err) {
-      // Nếu editReply fail, dùng reply ephemeral
-      await interaction.reply({ content: "❌ Đã xảy ra lỗi khi chuyển đổi bảng xếp hạng. Vui lòng thử lại.", ephemeral: true });
+      // Nếu editReply fail, dùng followUp (vì đã defer)
+      await interaction.followUp({ content: "❌ Đã xảy ra lỗi. Vui lòng thử lại.", ephemeral: true });
     }
   }
 }
