@@ -130,6 +130,14 @@ const { REST, Routes, SlashCommandBuilder } = require("discord.js");
 
 const slashCommands = [
     new SlashCommandBuilder()
+    .setName("topdaigiaserver")
+    .setDescription("Xem bảng xếp hạng đại gia trong server")
+    .toJSON(),
+  new SlashCommandBuilder()
+    .setName("topdaigiaglobal")
+    .setDescription("Xem bảng xếp hạng đại gia toàn cầu")
+    .toJSON(),
+    new SlashCommandBuilder()
     .setName("menu")
     .setDescription("Hiển thị danh sách các lệnh của bot")
     .toJSON(),
@@ -462,7 +470,23 @@ client.on("interactionCreate", async (interaction) => {
   
   if (interaction.isChatInputCommand()) {
 
-    if (interaction.commandName === "menu") {
+    if (interaction.commandName === "topdaigiaserver" || interaction.commandName === "topdaigiaglobal") {
+    const type = interaction.commandName === "topdaigiaserver" ? "server" : "global";
+    await interaction.deferReply();
+    const embedData = await buildTopEmbed(interaction.client, interaction.guild, interaction.user.id, type);
+    const row = new ActionRowBuilder().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId(`top_switch_${interaction.user.id}`)
+        .setPlaceholder("Chọn bảng xếp hạng")
+        .addOptions([
+          { label: "Server", value: "server", default: type === "server" },
+          { label: "Global", value: "global", default: type === "global" }
+        ])
+    );
+    await interaction.editReply({ embeds: [embedData.embed], components: [row] });
+  }
+
+  if (interaction.commandName === "menu") {
   const embed = new EmbedBuilder()
     .setColor("#f5d400")
     .setTitle("🏛️ Các lệnh của WEW")
@@ -741,7 +765,26 @@ client.on("interactionCreate", async (interaction) => {
       return interaction.reply({ content: `✅ Đã thiết lập kênh chơi nối từ mặc định: ${channel}`, ephemeral: true });
     }
 
-// ====================== TÀI XIU ======================
+  if (interaction.isStringSelectMenu() && interaction.customId?.startsWith("top_switch_")) {
+    const userId = interaction.customId.split("_")[2];
+    if (interaction.user.id !== userId) {
+      return interaction.reply({ content: "❌ Bạn không thể thay đổi bảng xếp hạng của người khác!", ephemeral: true });
+    }
+    const type = interaction.values[0]; // "server" hoặc "global"
+    await interaction.deferUpdate();
+    const embedData = await buildTopEmbed(interaction.client, interaction.guild, interaction.user.id, type);
+    const row = new ActionRowBuilder().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId(`top_switch_${interaction.user.id}`)
+        .setPlaceholder("Chọn bảng xếp hạng")
+        .addOptions([
+          { label: "Server", value: "server", default: type === "server" },
+          { label: "Global", value: "global", default: type === "global" }
+        ])
+    );
+    await interaction.editReply({ embeds: [embedData.embed], components: [row] });
+  }
+
 // ====================== TÀI XIU ======================
 if (interaction.isChatInputCommand() && interaction.commandName === "taixiu") {
   const channelId = interaction.channel.id;
@@ -2160,23 +2203,6 @@ if (cmd === "stop" || cmd === "chiu") {
     );
   }
 
-  if (cmd === "topdaigia") {
-    let list = [];
-    for (const [id, cash] of money.entries()) {
-      list.push({ id: id, cash: cash || 0 });
-    }
-    list.sort((a, b) => b.cash - a.cash);
-    let top = list.slice(0, 10);
-    let result = "";
-    for (let i = 0; i < top.length; i++) {
-      let user;
-      try { user = await client.users.fetch(top[i].id); } catch { user = { username: "Unknown" }; }
-      result += `🏅 Top ${i + 1}: ${user.username} — **${formatMoney(top[i].cash)}**\n`;
-    }
-    const embed = new EmbedBuilder().setColor("#00e1ff").setTitle("🏆 Top Đại Gia Toàn Bộ Server").setDescription(result || "Không có dữ liệu");
-    return message.reply({ embeds: [embed] });
-  }
-
   if (cmd === "addcode") {
     if (!isAdmin(userId)) return message.reply("❌ Không có quyền dùng lệnh này!");
     let code = args[0];
@@ -3557,6 +3583,81 @@ async function botPlayTurn(client, lobbyId) {
     }
   }
   updateGameUI(client, lobbyId, `🤖 Bot ${currentPlayer.name} đã đánh: ${cardToPlay.rank}${cardToPlay.suit}`);
+}
+
+async function buildTopEmbed(client, guild, userId, type) {
+  const isServer = type === "server";
+  const title = isServer ? "🏆 TOP ĐẠI GIA SERVER" : "🏆 TOP ĐẠI GIA TOÀN CẦU";
+
+  // Lấy danh sách người chơi
+  let userList = [];
+  if (isServer && guild) {
+    // Lấy tất cả member trong server
+    const members = await guild.members.fetch({ force: false }).catch(() => []);
+    for (const [id, member] of members) {
+      const cash = money.get(id) || 0;
+      if (cash > 0) {
+        userList.push({ id, username: member.displayName, cash });
+      }
+    }
+  } else {
+    // Global: lấy từ Map money
+    for (const [id, cash] of money.entries()) {
+      if (cash > 0) {
+        let username = "Unknown";
+        try {
+          const user = await client.users.fetch(id);
+          username = user.globalName || user.username;
+        } catch {}
+        userList.push({ id, username, cash });
+      }
+    }
+  }
+
+  // Sắp xếp giảm dần theo số xu
+  userList.sort((a, b) => b.cash - a.cash);
+
+  // Lấy rank của người dùng hiện tại
+  const userRank = userList.findIndex(u => u.id === userId) + 1;
+  const userCash = money.get(userId) || 0;
+
+  // Lấy top 10
+  const top = userList.slice(0, 10);
+
+  // Xây dựng embed
+  const embed = new EmbedBuilder()
+    .setColor("#f5d400")
+    .setTitle(title)
+    .setThumbnail(isServer ? guild?.iconURL({ dynamic: true, size: 512 }) : client.user.displayAvatarURL({ dynamic: true, size: 512 }))
+    .setDescription(
+      `**Guild:** ${isServer ? (guild ? guild.name : "Không xác định") : "Toàn cầu"}`
+    );
+
+  // Thêm thông tin của người dùng
+  let userStats = `**User:** <@${userId}>\n`;
+  userStats += `**Rank:** #${userRank > 0 ? userRank : "Chưa có"} (Top ${userList.length > 0 ? ((userRank / userList.length) * 100).toFixed(1) : 0}%)\n`;
+  userStats += `**Số xu:** ${formatMoney(userCash)}`;
+  embed.addFields({ name: "📊 Thống kê của bạn", value: userStats, inline: false });
+
+  // Thêm bảng xếp hạng
+  let rankList = "";
+  if (top.length === 0) {
+    rankList = "Chưa có dữ liệu";
+  } else {
+    for (let i = 0; i < top.length; i++) {
+      const p = top[i];
+      rankList += `**${i+1}.** <@${p.id}> — ${formatMoney(p.cash)}\n`;
+    }
+  }
+  embed.addFields({ name: "📋 Bảng xếp hạng", value: rankList, inline: false });
+
+  // Footer
+  const totalPlayers = userList.length;
+  const now = new Date();
+  const timeStr = now.toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
+  embed.setFooter({ text: `Tổng số người chơi: ${totalPlayers} · Cập nhật: ${timeStr}` });
+
+  return { embed };
 }
 
 // Hàm giải quyết logic Bỏ Qua lượt (Ấn nút hoặc Hết giờ)
