@@ -76,7 +76,8 @@ async function findGlobalUser(client, input) {
 
 const client = new Client({
   intents: [
-    GatewayIntentBits.Guilds, 
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildMessages, 
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.DirectMessages // Bật quyền nhận tin nhắn riêng
@@ -3598,12 +3599,22 @@ async function botPlayTurn(client, lobbyId) {
 async function buildTopEmbed(client, guild, userId, type) {
   const isServer = type === "server";
   const title = isServer ? "🏆 TOP ĐẠI GIA SERVER" : "🏆 TOP ĐẠI GIA TOÀN CẦU";
-  let userList = [];
 
+  // Trường hợp dùng lệnh server nhưng không có guild (DM)
+  if (isServer && !guild) {
+    const embed = new EmbedBuilder()
+      .setColor("#ff4444")
+      .setTitle("❌ Lỗi")
+      .setDescription("Lệnh top server chỉ có thể dùng trong server!")
+      .setFooter({ text: "WEW BOT" });
+    return { embed };
+  }
+
+  let userList = [];
   try {
     if (isServer && guild) {
-      // Dùng cache để tránh fetch chậm
-      const members = guild.members.cache;
+      // Lấy toàn bộ member trong server (bắt buộc để có danh sách đầy đủ)
+      const members = await guild.members.fetch({ force: true });
       for (const [id, member] of members) {
         const cash = money.get(id) || 0;
         if (cash > 0) {
@@ -3611,7 +3622,7 @@ async function buildTopEmbed(client, guild, userId, type) {
         }
       }
     } else {
-      // Global: lấy từ Map money
+      // Global: từ Map money
       for (const [id, cash] of money.entries()) {
         if (cash > 0) {
           let username = "Unknown";
@@ -3625,7 +3636,6 @@ async function buildTopEmbed(client, guild, userId, type) {
     }
   } catch (err) {
     console.error("Lỗi buildTopEmbed:", err);
-    // Trả về embed báo lỗi
     const embed = new EmbedBuilder()
       .setColor("#ff4444")
       .setTitle("❌ Lỗi")
@@ -3634,7 +3644,7 @@ async function buildTopEmbed(client, guild, userId, type) {
     return { embed };
   }
 
-  // Sắp xếp giảm dần
+  // Sắp xếp
   userList.sort((a, b) => b.cash - a.cash);
 
   const userRank = userList.findIndex(u => u.id === userId) + 1;
@@ -3642,7 +3652,7 @@ async function buildTopEmbed(client, guild, userId, type) {
   const top = userList.slice(0, 10);
   const totalPlayers = userList.length;
 
-  // Xây embed theo phong cách OWO
+  // Embed
   const embed = new EmbedBuilder()
     .setColor("#f5d400")
     .setTitle(title)
@@ -3654,6 +3664,9 @@ async function buildTopEmbed(client, guild, userId, type) {
   stats += `**Rank:** #${userRank > 0 ? userRank : "Chưa có"} (${userList.length > 0 ? ((userRank / userList.length) * 100).toFixed(1) : 0}%)\n`;
   stats += `**Số xu:** ${formatMoney(userCash)}`;
   embed.addFields({ name: "📊 Your Current Stats", value: stats, inline: false });
+
+  // Đường phân cách (giống OWO)
+  embed.addFields({ name: "\u200b", value: "---------------", inline: false });
 
   // Phần "Rankings"
   let rankList = "";
